@@ -83,16 +83,13 @@ def render_summary_tab(df, selected_week):
 
     if len(recent_weeks) >= 2:
         trend_data = df_dev[df_dev["Week"].isin(recent_weeks)].groupby(["Developer", "Week"])["Story Points"].sum().unstack(fill_value=0)
-        try:
-            trend_data["Delta"] = trend_data[recent_weeks[-1]] - trend_data[recent_weeks[-2]]
-            if not trend_data.empty:
-                most_improved = trend_data["Delta"].idxmax(), trend_data["Delta"].max()
-                largest_drop = trend_data["Delta"].idxmin(), trend_data["Delta"].min()
-                consistent_mask = (trend_data[recent_weeks] > 3).all(axis=1)
-                consistent = trend_data[consistent_mask].index.tolist()
-                consistent_performer = consistent[0] if consistent else None
-        except Exception:
-            pass
+        trend_data["Delta"] = trend_data[recent_weeks[-1]] - trend_data[recent_weeks[-2]]
+        if not trend_data.empty:
+            most_improved = trend_data["Delta"].idxmax(), trend_data["Delta"].max()
+            largest_drop = trend_data["Delta"].idxmin(), trend_data["Delta"].min()
+            consistent_mask = (trend_data[recent_weeks] > 3).all(axis=1)
+            consistent = trend_data[consistent_mask].index.tolist()
+            consistent_performer = consistent[0] if consistent else None
 
     st.markdown("### Insights")
     st.markdown("**Top 3 Developers**")
@@ -132,7 +129,6 @@ def main():
     st.set_page_config(page_title="Team Productivity Dashboard", layout="wide")
 
     st.title("📊 Development Team Productivity Dashboard")
-
     df = load_excel()
     if df.empty:
         st.warning("No data available to display.")
@@ -151,8 +147,15 @@ def main():
     if selected:
         selected_week = selected.split()[0]
         tabs = st.tabs(["Summary", "Trends", "Tasks", "Export"])
+
         with tabs[0]:
             render_summary_tab(df, selected_week)
+        with tabs[1]:
+            st.info("Trends tab coming soon...")
+        with tabs[2]:
+            st.info("Tasks view coming soon...")
+        with tabs[3]:
+            st.info("Export functionality coming soon...")
 
 if __name__ == "__main__":
     main()
