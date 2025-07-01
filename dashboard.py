@@ -50,8 +50,8 @@ def preprocess_data(df):
 def get_week_options(df):
     today = datetime.today()
     week_map = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
-    week_map = week_map[week_map["Week Start"] <= today]
-    return week_map.sort_values("Week Start", ascending=False).reset_index(drop=True)
+    week_map = week_map[week_map["Week Start"] <= today]  # Filter out future weeks
+    return week_map.sort_values("Week Start", ascending=False).reset_index(drop=True)  # Descending order
 
 def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
@@ -112,7 +112,7 @@ def render_trend_tab(df):
     all_weeks_df = all_weeks_df[all_weeks_df["Week Start"] <= today]
     all_weeks_df = all_weeks_df.sort_values("Week Start", ascending=False).reset_index(drop=True)
     all_weeks = all_weeks_df["Week"].tolist()
-    recent_weeks = all_weeks[:4][::-1]
+    recent_weeks = all_weeks[:4][::-1]  # Latest 4 weeks in ascending order
 
     dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
     df_dev = df[df["Developer"] == dev_option]
@@ -123,18 +123,18 @@ def render_trend_tab(df):
     if not weekly_dev.empty:
         weekly_dev["Delta"] = weekly_dev["Story Points"].diff().fillna(0)
         weekly_dev["Color"] = weekly_dev["Delta"].apply(lambda x: "green" if x > 0 else ("red" if x < 0 else "gray"))
-        weekly_dev["Change"] = weekly_dev["Delta"].apply(lambda x: "<span style='color:green;'>⬆️</span>" if x > 0 else ("<span style='color:red;'>⬇️</span>" if x < 0 else "➖"))
+        weekly_dev["Change"] = weekly_dev["Delta"].apply(lambda x: "⬆️" if x > 0 else ("⬇️" if x < 0 else "➖"))
 
         dev_chart = alt.Chart(weekly_dev).mark_line(point=True).encode(
             x=alt.X("Week:N", title="Week"),
             y=alt.Y("Story Points:Q", title="Story Points"),
             color=alt.Color("Color:N", scale=None),
-            tooltip=["Week", "Story Points"]
+            tooltip=["Week", "Story Points", "Change"]
         ).properties(title=f"{dev_option} Productivity (Last 4 Weeks)", height=250)
         st.altair_chart(dev_chart, use_container_width=True)
 
         st.markdown("#### Tabular View")
-        st.markdown(weekly_dev.to_html(columns=["Week", "Story Points", "Change"], escape=False, index=False), unsafe_allow_html=True)
+        st.dataframe(weekly_dev[["Week", "Story Points", "Change"]])
     else:
         st.info("No completed tasks found for selected developer.")
 
