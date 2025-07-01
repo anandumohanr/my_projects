@@ -4,6 +4,7 @@ import requests
 from io import BytesIO
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
+import altair as alt
 
 # Constants
 SHAREPOINT_URL = "https://impelsysinc-my.sharepoint.com/:x:/g/personal/anandu_m_medlern_com/EXxi7DECTpxDgA-Hx44P-G8B-PgU74kHUVKlz3VfbTNX5w?download=1"
@@ -91,11 +92,13 @@ def render_summary_tab(df, selected_week):
     st.dataframe(team_summary)
 
     st.markdown("### Team Productivity Chart")
-    fig, ax = plt.subplots(figsize=(6, 3))
-    ax.plot([selected_week], [total_completed], marker='o')
-    ax.set_ylabel("Story Points")
-    ax.set_title("Team Productivity for Selected Week")
-    st.pyplot(fig)
+    chart_data = pd.DataFrame({"Week": [selected_week], "Story Points": [total_completed]})
+    chart = alt.Chart(chart_data).mark_line(point=True).encode(
+        x=alt.X("Week:N", title="Week"),
+        y=alt.Y("Story Points:Q", title="Total Story Points"),
+        tooltip=["Week", "Story Points"]
+    ).properties(height=250)
+    st.altair_chart(chart, use_container_width=True)
 
     return summary_df, team_summary
 
@@ -110,13 +113,12 @@ def render_trend_tab(df):
     weekly_summary.columns = ["Week", "Story Points"]
 
     if not weekly_summary.empty:
-        fig, ax = plt.subplots(figsize=(6, 3))
-        ax.plot(weekly_summary["Week"], weekly_summary["Story Points"], marker='o')
-        ax.set_ylabel("Total Completed Story Points")
-        ax.set_title("Weekly Productivity Trend")
-        ax.grid(True)
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
+        line_chart = alt.Chart(weekly_summary).mark_line(point=True).encode(
+            x=alt.X("Week:N", title="Week"),
+            y=alt.Y("Story Points:Q", title="Story Points"),
+            tooltip=["Week", "Story Points"]
+        ).properties(title="Weekly Productivity Trend", height=250)
+        st.altair_chart(line_chart, use_container_width=True)
     else:
         st.info("No completed data to show trend.")
 
@@ -128,13 +130,15 @@ def render_trend_tab(df):
     weekly_dev.columns = ["Week", "Story Points"]
 
     if not weekly_dev.empty:
-        fig, ax = plt.subplots(figsize=(6, 3))
-        ax.plot(weekly_dev["Week"], weekly_dev["Story Points"], marker='o')
-        ax.set_ylabel("Completed Story Points")
-        ax.set_title(f"{dev_option} Productivity (Last 4 Weeks)")
-        ax.grid(True)
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
+        dev_chart = alt.Chart(weekly_dev).mark_line(point=True).encode(
+            x=alt.X("Week:N", title="Week"),
+            y=alt.Y("Story Points:Q", title="Story Points"),
+            tooltip=["Week", "Story Points"]
+        ).properties(title=f"{dev_option} Productivity (Last 4 Weeks)", height=250)
+        st.altair_chart(dev_chart, use_container_width=True)
+
+        st.markdown("#### Tabular View")
+        st.dataframe(weekly_dev)
     else:
         st.info("No completed tasks found for selected developer.")
 
