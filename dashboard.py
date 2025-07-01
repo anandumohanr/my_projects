@@ -93,20 +93,16 @@ def render_summary_tab(df, selected_week):
     total_completed = summary_df["Completed Points"].sum()
     team_productivity = round((total_completed / total_possible) * 100, 1) if total_possible else 0.0
 
-    top_3 = summary_df.sort_values("Completed Points", ascending=False).head(3)
-    zero_productivity = summary_df[summary_df["Completed Points"] == 0]
-
-    st.markdown("### Insights")
-    st.markdown("**Top 3 Developers**")
-    st.dataframe(top_3)
-
     st.markdown("**Active Developers with In-Progress Tasks**")
     active_in_progress = summary_df[(summary_df["Completed Points"] == 0) & (summary_df["In Progress Points"] > 0)]
     if active_in_progress.empty:
         st.write("None")
     else:
         for _, row in active_in_progress.iterrows():
-            st.markdown(f"🚧 {row['Developer']} is working on {row['In Progress Points']} SP task(s) likely due next week")
+            dev_tasks = in_progress_df[in_progress_df["Developer"] == row["Developer"]]
+            due_dates = dev_tasks["Due Date"].dropna().dt.strftime("%d-%b-%Y").unique()
+            due_str = ", ".join(sorted(due_dates))
+            st.markdown(f"🚧 {row['Developer']} is working on {row['In Progress Points']} SP task(s) due on: {due_str}")
 
     st.subheader("Team Overview")
     team_summary = pd.DataFrame({
