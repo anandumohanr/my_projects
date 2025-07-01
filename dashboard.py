@@ -3,11 +3,21 @@ import pandas as pd
 import requests
 from io import BytesIO
 from datetime import datetime
-import matplotlib.pyplot as plt
 
 # Constants
 SHAREPOINT_URL = "https://impelsysinc-my.sharepoint.com/:x:/g/personal/anandu_m_medlern_com/EXxi7DECTpxDgA-Hx44P-G8B-PgU74kHUVKlz3VfbTNX5w?download=1"
 COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
+DEVELOPERS = [
+    "Anandu Mohan",
+    "Ravi Kumar",
+    "shree.vidya",
+    "Brijesh Kanchan",
+    "Hari Prasad H S",
+    "Fahad P K",
+    "Venukumar DL",
+    "Kishore C",
+    "padmaja"
+]
 
 @st.cache_data(show_spinner=False)
 def load_excel():
@@ -36,17 +46,6 @@ def preprocess_data(df):
 def get_week_options(df):
     return sorted(df["Week"].dropna().unique())
 
-def plot_productivity_bar(df, title, by="Developer"):
-    summary = df.groupby(by)["Story Points"].sum().sort_values(ascending=False)
-    if summary.empty:
-        st.warning("No completed tasks to plot for selected filter.")
-        return
-    fig, ax = plt.subplots()
-    summary.plot(kind="bar", ax=ax)
-    ax.set_title(title)
-    ax.set_ylabel("Story Points")
-    st.pyplot(fig)
-
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
     st.title("\U0001F4CA Weekly Productivity Dashboard")
@@ -61,9 +60,20 @@ def main():
     selected_weeks = st.multiselect("Select week(s) to view:", week_options, default=week_options[-1:])
     filtered_df = df[df["Week"].isin(selected_weeks)]
 
-    st.subheader("Developer-wise Productivity")
+    st.subheader("Developer Productivity Summary")
     completed_df = filtered_df[filtered_df["Is Completed"]]
-    plot_productivity_bar(completed_df, "Completed Story Points per Developer")
+    developer_points = completed_df.groupby("Developer")["Story Points"].sum().to_dict()
+
+    all_developers = set(DEVELOPERS).union(set(developer_points.keys()))
+    data = []
+    for dev in sorted(all_developers):
+        points = developer_points.get(dev, 0)
+        data.append({"Developer": dev, "Completed Points": points})
+
+    summary_df = pd.DataFrame(data)
+    total_points = summary_df["Completed Points"].sum()
+    summary_df["% of Total"] = summary_df["Completed Points"].apply(lambda x: f"{(x / total_points * 100):.1f}%" if total_points else "0.0%")
+    st.dataframe(summary_df)
 
     st.subheader("Team Overview")
     if not completed_df.empty:
