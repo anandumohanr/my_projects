@@ -84,18 +84,21 @@ def main():
     total_possible = len(all_developers) * 5
     total_completed = summary_df["Completed Points"].sum()
     team_productivity = round((total_completed / total_possible) * 100, 1) if total_possible else 0.0
-    st.markdown(f"### 🔢 Total Team Productivity: {team_productivity}%")
 
-    # Bar Chart Visualization
     st.subheader("Developer-wise Completed Points")
-    fig, ax = plt.subplots()
-    summary_df.set_index("Developer")["Completed Points"].plot(kind="bar", ax=ax)
+    fig, ax = plt.subplots(figsize=(8, 4))
+    summary_df.set_index("Developer")["Completed Points"].plot(kind="line", marker='o', ax=ax)
     ax.set_ylabel("Story Points")
     ax.set_title("Completed Story Points by Developer")
+    ax.grid(True)
     st.pyplot(fig)
 
     st.subheader("Team Overview")
-    team_summary = pd.DataFrame({"Week": [selected_week], "Story Points": [total_completed]})
+    team_summary = pd.DataFrame({
+        "Week": [selected_week],
+        "Story Points": [total_completed],
+        "Team Productivity %": [f"{team_productivity}%"]
+    })
     st.dataframe(team_summary)
 
     st.subheader("Detailed Task Table")
