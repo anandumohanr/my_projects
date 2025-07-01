@@ -106,24 +106,27 @@ def render_summary_tab(df, selected_week):
     if active_in_progress.empty:
         st.write("None")
     else:
-        for _, row in active_in_progress.iterrows():
-            dev = row["Developer"]
-            dev_tasks = in_progress_df_all[in_progress_df_all["Developer"] == dev]
+        st.markdown("### View In-Progress Tasks by Developer")
+        selected_dev = st.selectbox("Select Developer", options=active_in_progress["Developer"].tolist())
+        
+        if selected_dev:
+            row = active_in_progress[active_in_progress["Developer"] == selected_dev].iloc[0]
+            dev_tasks = in_progress_df_all[in_progress_df_all["Developer"] == selected_dev]
             due_dates = dev_tasks["Due Date"].dropna().dt.strftime("%d-%b-%Y").unique()
             due_str = ", ".join(sorted(due_dates))
-    
-            st.markdown(f"🚧 **{dev}** is working on **{row['In Progress Points']} SP** task(s), due on: *{due_str}*")
-    
-            with st.expander(f"See in-progress tasks for {dev}"):
-                if not dev_tasks.empty:
-                    display_df = dev_tasks[["Key", "Summary", "Status", "Due Date", "Story Points"]].copy()
-                    display_df["Key"] = display_df["Key"].apply(
-                        lambda x: f"[{x}]({x})" if isinstance(x, str) and x.startswith("http") else x
-                    )
-                    display_df["Due Date"] = display_df["Due Date"].dt.strftime("%d-%b-%Y")
-                    st.markdown(display_df.to_markdown(index=False), unsafe_allow_html=True)
-                else:
-                    st.write("No task details available.")
+        
+            st.markdown(f"🚧 **{selected_dev}** is working on **{row['In Progress Points']} SP** task(s), due on: *{due_str}*")
+        
+            if not dev_tasks.empty:
+                display_df = dev_tasks[["Key", "Summary", "Status", "Due Date", "Story Points"]].copy()
+                display_df["Key"] = display_df["Key"].apply(
+                    lambda x: f"[{x}]({x})" if isinstance(x, str) and x.startswith("http") else f"[{x}](https://impelsys.atlassian.net/browse/{x})" if isinstance(x, str) else x
+                )
+                display_df["Due Date"] = display_df["Due Date"].dt.strftime("%d-%b-%Y")
+                st.write("### Task Details")
+                st.markdown(display_df.to_markdown(index=False), unsafe_allow_html=True)
+            else:
+                st.write("No task details available.")
 
     st.subheader("Team Overview")
     team_summary = pd.DataFrame({
