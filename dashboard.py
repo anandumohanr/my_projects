@@ -62,22 +62,10 @@ def render_summary_tab(df, selected_week):
         points = developer_points.get(dev, 0)
         productivity_percent = round(points / 5 * 100, 1)
         productivity_display = f"{productivity_percent}%" if productivity_percent <= 100 else "100.0%+"
-        color = "red" if productivity_percent < 80 else "black"
-        data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity_display, "_style": f"color: {color};"})
+        data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity_display})
 
     summary_df = pd.DataFrame(data)
-    def highlight_low_productivity(val):
-        try:
-            if isinstance(val, str) and "%" in val:
-                num = float(val.replace("%", "").replace("+", ""))
-                if num < 80:
-                    return "color: red"
-        except:
-            pass
-        return ""
-    
-    styled_summary = summary_df.style.applymap(highlight_low_productivity, subset=["Productivity % (out of 5 SP)"])
-    st.dataframe(styled_summary)
+    st.dataframe(summary_df)
 
     total_possible = len(all_developers) * 5
     total_completed = summary_df["Completed Points"].sum()
@@ -115,32 +103,34 @@ def render_summary_tab(df, selected_week):
     return summary_df, team_summary
 
 def render_trend_tab(df):
-    st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
+    df_completed = df[df["Is Completed"]].copy()
     all_weeks_df = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
     all_weeks_df = all_weeks_df.sort_values("Week Start").reset_index(drop=True)
     all_weeks = all_weeks_df["Week"].tolist()
-    recent_weeks = all_weeks[-4:]
 
+    weekly_summary = df_completed.groupby("Week")["Story Points"].sum().reindex(all_weeks, fill_value=0).reset_index()
+    weekly_summary.columns = ["Week", "Story Points"]
+
+    st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
     dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
     df_dev = df[df["Developer"] == dev_option]
     df_dev_completed = df_dev[df_dev["Is Completed"]]
-    weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().reindex(recent_weeks, fill_value=0).reset_index()
+    weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().reindex(all_weeks, fill_value=0).reset_index()
     weekly_dev.columns = ["Week", "Story Points"]
 
     if not weekly_dev.empty:
         weekly_dev["Delta"] = weekly_dev["Story Points"].diff().fillna(0)
-        weekly_dev["Color"] = weekly_dev["Delta"].apply(lambda x: "green" if x > 0 else ("red" if x < 0 else "gray"))
+        weekly_dev["Trend"] = weekly_dev["Delta"].apply(lambda x: "⬆️" if x > 0 else ("⬇️" if x < 0 else "➖"))
 
         dev_chart = alt.Chart(weekly_dev).mark_line(point=True).encode(
             x=alt.X("Week:N", title="Week"),
             y=alt.Y("Story Points:Q", title="Story Points"),
-            color=alt.Color("Color:N", scale=None),
-            tooltip=["Week", "Story Points", "Delta"]
+            tooltip=["Week", "Story Points", "Trend"]
         ).properties(title=f"{dev_option} Productivity (Last 4 Weeks)", height=250)
         st.altair_chart(dev_chart, use_container_width=True)
 
         st.markdown("#### Tabular View")
-        st.dataframe(weekly_dev[["Week", "Story Points", "Delta"]])
+        st.dataframe(weekly_dev[["Week", "Story Points", "Trend"]])
     else:
         st.info("No completed tasks found for selected developer.")
 
