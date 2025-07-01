@@ -16,10 +16,14 @@ def load_excel():
         headers = {"User-Agent": "Mozilla/5.0"}
         r = requests.get(SHAREPOINT_URL, headers=headers)
         r.raise_for_status()
+
+        if b"<html" in r.content[:100].lower():
+            raise ValueError("Downloaded file is not a valid Excel document.")
+
         return pd.read_excel(BytesIO(r.content), engine="openpyxl")
     except Exception as e:
-        st.warning(f"SharePoint load failed: {e}. Loading local fallback file.")
-        return pd.read_excel("Development Team Productivity.xlsx", engine="openpyxl")
+        st.error(f"Failed to load data from SharePoint: {e}")
+        return pd.DataFrame()
 
 def preprocess_data(df):
     df = df.copy()
@@ -46,6 +50,9 @@ def main():
     st.title("\U0001F4CA Weekly Productivity Dashboard")
 
     df = load_excel()
+    if df.empty:
+        st.stop()
+
     df = preprocess_data(df)
 
     week_options = get_week_options(df)
