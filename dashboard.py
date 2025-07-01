@@ -158,7 +158,9 @@ def main():
         render_export_tab(team_summary)
 
     st.markdown("<hr/>", unsafe_allow_html=True)
-    st.caption(f"Last data refresh: {datetime.now().astimezone().strftime('%Y-%m-%d %I:%M %p %Z')}")
-
+    ist = pytz.timezone("Asia/Kolkata")
+    now_ist = datetime.now(ist).strftime('%Y-%m-%d %I:%M %p %Z')
+    st.caption(f"Last data refresh: {now_ist}")
+    
 if __name__ == "__main__":
     main()
