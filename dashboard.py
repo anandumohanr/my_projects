@@ -5,6 +5,7 @@ from io import BytesIO
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import altair as alt
+import pytz
 
 # Constants
 SHAREPOINT_URL = "https://impelsysinc-my.sharepoint.com/:x:/g/personal/anandu_m_medlern_com/EXxi7DECTpxDgA-Hx44P-G8B-PgU74kHUVKlz3VfbTNX5w?download=1"
