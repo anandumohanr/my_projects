@@ -48,8 +48,10 @@ def preprocess_data(df):
     return df
 
 def get_week_options(df):
+    today = datetime.today()
     week_map = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
-    return week_map.sort_values("Week Start").reset_index(drop=True)
+    week_map = week_map[week_map["Week Start"] <= today]  # Filter out future weeks
+    return week_map.sort_values("Week Start", ascending=False).reset_index(drop=True)  # Descending order
 
 def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
