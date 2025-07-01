@@ -62,7 +62,7 @@ def render_summary_tab(df, selected_week):
     all_developers = set(DEVELOPERS).union(set(developer_points.keys()))
     data = []
     for dev in sorted(all_developers):
-        points = developer_points.get(dev, 0)
+        points = int(developer_points.get(dev, 0))
         productivity_percent = round(points / 5 * 100, 1)
         productivity_display = f"{productivity_percent}%" if productivity_percent <= 100 else "100.0%+"
         data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity_display})
