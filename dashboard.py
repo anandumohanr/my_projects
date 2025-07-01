@@ -152,11 +152,17 @@ def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
     st.title("📊 Weekly Productivity Dashboard")
 
-    if st.button("🔄 Refresh Now"):
-        st.cache_data.clear()
-        st.success("✅ Data refreshed successfully")
-        time.sleep(1)
-        st.experimental_rerun()
+    ist = pytz.timezone("Asia/Kolkata")
+    now_ist = datetime.now(ist).strftime('%Y-%m-%d %I:%M %p %Z')
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        if st.button("🔄 Refresh Now"):
+            st.cache_data.clear()
+            st.success("✅ Data refreshed successfully")
+            time.sleep(1)
+            st.experimental_rerun()
+    with col2:
+        st.caption(f"Last data refresh: {now_ist}")
 
     with st.spinner("Fetching and processing data from SharePoint..."):
         df = load_excel()
@@ -184,11 +190,6 @@ def main():
 
     with tabs[3]:
         render_export_tab(team_summary)
-
-    st.markdown("<hr/>", unsafe_allow_html=True)
-    ist = pytz.timezone("Asia/Kolkata")
-    now_ist = datetime.now(ist).strftime('%Y-%m-%d %I:%M %p %Z')
-    st.caption(f"Last data refresh: {now_ist}")
 
 if __name__ == "__main__":
     main()
