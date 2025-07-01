@@ -100,13 +100,12 @@ def render_summary_tab(df, selected_week):
     total_completed = summary_df["Completed Points"].sum()
     team_productivity = round((total_completed / total_possible) * 100, 1) if total_possible else 0.0
 
-    st.markdown("**Active Developers with In-Progress Tasks**")
+    st.markdown("### Active Developers with In-Progress Tasks")
     active_in_progress = summary_df[summary_df["In Progress Points"] > 0]
     
     if active_in_progress.empty:
         st.write("None")
     else:
-        st.markdown("### Active Developers with In-Progress Tasks")
 
         if active_in_progress.empty:
             st.write("None")
