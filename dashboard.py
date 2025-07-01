@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
 
 # Constants
 SHAREPOINT_URL = "https://impelsysinc-my.sharepoint.com/:x:/g/personal/anandu_m_medlern_com/EXxi7DECTpxDgA-Hx44P-G8B-PgU74kHUVKlz3VfbTNX5w?download=1"
@@ -72,14 +73,29 @@ def main():
     data = []
     for dev in sorted(all_developers):
         points = developer_points.get(dev, 0)
-        productivity = f"{(points / 5 * 100):.1f}%" if points <= 5 else "100.0%+"
-        data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity})
+        productivity_percent = round(points / 5 * 100, 1)
+        productivity_display = f"{productivity_percent}%" if productivity_percent <= 100 else "100.0%+"
+        data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity_display})
 
     summary_df = pd.DataFrame(data)
     st.dataframe(summary_df)
 
+    # Team Productivity Summary
+    total_possible = len(all_developers) * 5
+    total_completed = summary_df["Completed Points"].sum()
+    team_productivity = round((total_completed / total_possible) * 100, 1) if total_possible else 0.0
+    st.markdown(f"### 🔢 Total Team Productivity: {team_productivity}%")
+
+    # Bar Chart Visualization
+    st.subheader("Developer-wise Completed Points")
+    fig, ax = plt.subplots()
+    summary_df.set_index("Developer")["Completed Points"].plot(kind="bar", ax=ax)
+    ax.set_ylabel("Story Points")
+    ax.set_title("Completed Story Points by Developer")
+    st.pyplot(fig)
+
     st.subheader("Team Overview")
-    team_summary = pd.DataFrame({"Week": [selected_week], "Story Points": [completed_df["Story Points"].sum()]})
+    team_summary = pd.DataFrame({"Week": [selected_week], "Story Points": [total_completed]})
     st.dataframe(team_summary)
 
     st.subheader("Detailed Task Table")
