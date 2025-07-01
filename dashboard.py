@@ -66,7 +66,7 @@ def render_summary_tab(df, selected_week):
     zero_productivity = summary_df[summary_df["Completed Points"] == 0]
 
     df_dev = df[df["Developer"].isin(all_developers) & df["Is Completed"]]
-    recent_weeks = sorted(df_dev["Week"].unique())[-4:]
+    recent_weeks = sorted(df_dev["Week"].dropna().unique())[-4:]
 
     trend_data = pd.DataFrame()
     most_improved = None
@@ -120,9 +120,9 @@ def render_summary_tab(df, selected_week):
 
 def render_trend_tab(df):
     st.subheader("Developer-wise 4-Week Trend")
-    recent_weeks = sorted(df["Week"].unique())[-4:]
+    recent_weeks = sorted(df["Week"].dropna().unique())[-4:]
     df_trend = df[df["Week"].isin(recent_weeks) & df["Is Completed"]]
-    dev_selection = st.selectbox("Select developer to view trend:", sorted(set(DEVELOPERS).union(df_trend["Developer"])))
+    dev_selection = st.selectbox("Select developer to view trend:", sorted(set(DEVELOPERS).union(df_trend["Developer"].dropna().astype(str))))
     df_dev = df_trend[df_trend["Developer"] == dev_selection]
     weekly_points = df_dev.groupby("Week")["Story Points"].sum().reindex(recent_weeks, fill_value=0).reset_index()
 
