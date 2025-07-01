@@ -90,7 +90,6 @@ def render_summary_tab(df, selected_week):
     })
     st.dataframe(team_summary)
 
-    # Team productivity chart
     st.markdown("### Team Productivity Chart")
     fig, ax = plt.subplots(figsize=(4, 2))
     ax.plot([selected_week], [total_completed], marker='o')
@@ -115,6 +114,23 @@ def render_trend_tab(df):
     else:
         st.info("No completed data to show trend.")
 
+    st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
+    dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
+    df_dev = df[df["Developer"] == dev_option]
+    df_dev_completed = df_dev[df_dev["Is Completed"]]
+    weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().reset_index()
+
+    if not weekly_dev.empty:
+        fig, ax = plt.subplots(figsize=(4, 2))
+        ax.plot(weekly_dev["Week"], weekly_dev["Story Points"], marker='o')
+        ax.set_ylabel("Completed Story Points")
+        ax.set_title(f"{dev_option} Productivity (Last 4 Weeks)")
+        ax.grid(True)
+        plt.xticks(rotation=45)
+        st.pyplot(fig)
+    else:
+        st.info("No completed tasks found for selected developer.")
+
 def render_tasks_tab(df, selected_week):
     st.subheader("Detailed Task Table")
     filtered_df = df[df["Week"] == selected_week]
@@ -126,7 +142,7 @@ def render_export_tab(team_summary):
 
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
-    st.title("\U0001F4CA Weekly Productivity Dashboard")
+    st.title("📊 Weekly Productivity Dashboard")
 
     with st.spinner("Fetching and processing data from SharePoint..."):
         df = load_excel()
