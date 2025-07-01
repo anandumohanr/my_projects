@@ -91,7 +91,7 @@ def render_summary_tab(df, selected_week):
     st.dataframe(team_summary)
 
     st.markdown("### Team Productivity Chart")
-    fig, ax = plt.subplots(figsize=(3, 1.5))
+    fig, ax = plt.subplots(figsize=(6, 3))
     ax.plot([selected_week], [total_completed], marker='o')
     ax.set_ylabel("Story Points")
     ax.set_title("Team Productivity for Selected Week")
@@ -102,13 +102,15 @@ def render_summary_tab(df, selected_week):
 def render_trend_tab(df):
     st.subheader("Multi-week Team Productivity Trend")
     df_completed = df[df["Is Completed"]].copy()
-    all_weeks = df["Week"].sort_values().unique()
+    all_weeks_df = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
+    all_weeks_df = all_weeks_df.sort_values("Week Start").reset_index(drop=True)
+    all_weeks = all_weeks_df["Week"].tolist()
 
     weekly_summary = df_completed.groupby("Week")["Story Points"].sum().reindex(all_weeks, fill_value=0).reset_index()
     weekly_summary.columns = ["Week", "Story Points"]
 
     if not weekly_summary.empty:
-        fig, ax = plt.subplots(figsize=(3, 1.5))
+        fig, ax = plt.subplots(figsize=(6, 3))
         ax.plot(weekly_summary["Week"], weekly_summary["Story Points"], marker='o')
         ax.set_ylabel("Total Completed Story Points")
         ax.set_title("Weekly Productivity Trend")
@@ -126,7 +128,7 @@ def render_trend_tab(df):
     weekly_dev.columns = ["Week", "Story Points"]
 
     if not weekly_dev.empty:
-        fig, ax = plt.subplots(figsize=(3, 1.5))
+        fig, ax = plt.subplots(figsize=(6, 3))
         ax.plot(weekly_dev["Week"], weekly_dev["Story Points"], marker='o')
         ax.set_ylabel("Completed Story Points")
         ax.set_title(f"{dev_option} Productivity (Last 4 Weeks)")
