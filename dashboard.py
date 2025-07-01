@@ -113,12 +113,16 @@ def render_trend_tab(df):
     weekly_summary.columns = ["Week", "Story Points"]
 
     if not weekly_summary.empty:
+        weekly_summary["Delta"] = weekly_summary["Story Points"].diff().fillna(0)
+        weekly_summary["Trend"] = weekly_summary["Delta"].apply(lambda x: "⬆️" if x > 0 else ("⬇️" if x < 0 else "➖"))
+
         line_chart = alt.Chart(weekly_summary).mark_line(point=True).encode(
             x=alt.X("Week:N", title="Week"),
             y=alt.Y("Story Points:Q", title="Story Points"),
-            tooltip=["Week", "Story Points"]
+            tooltip=["Week", "Story Points", "Trend"]
         ).properties(title="Weekly Productivity Trend", height=250)
         st.altair_chart(line_chart, use_container_width=True)
+        st.dataframe(weekly_summary[["Week", "Story Points", "Trend"]])
     else:
         st.info("No completed data to show trend.")
 
@@ -130,15 +134,18 @@ def render_trend_tab(df):
     weekly_dev.columns = ["Week", "Story Points"]
 
     if not weekly_dev.empty:
+        weekly_dev["Delta"] = weekly_dev["Story Points"].diff().fillna(0)
+        weekly_dev["Trend"] = weekly_dev["Delta"].apply(lambda x: "⬆️" if x > 0 else ("⬇️" if x < 0 else "➖"))
+
         dev_chart = alt.Chart(weekly_dev).mark_line(point=True).encode(
             x=alt.X("Week:N", title="Week"),
             y=alt.Y("Story Points:Q", title="Story Points"),
-            tooltip=["Week", "Story Points"]
+            tooltip=["Week", "Story Points", "Trend"]
         ).properties(title=f"{dev_option} Productivity (Last 4 Weeks)", height=250)
         st.altair_chart(dev_chart, use_container_width=True)
 
         st.markdown("#### Tabular View")
-        st.dataframe(weekly_dev)
+        st.dataframe(weekly_dev[["Week", "Story Points", "Trend"]])
     else:
         st.info("No completed tasks found for selected developer.")
 
