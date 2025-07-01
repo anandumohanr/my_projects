@@ -107,7 +107,9 @@ def render_summary_tab(df, selected_week):
 
 def render_trend_tab(df):
     st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
+    today = datetime.today()
     all_weeks_df = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
+    all_weeks_df = all_weeks_df[all_weeks_df["Week Start"] <= today]
     all_weeks_df = all_weeks_df.sort_values("Week Start").reset_index(drop=True)
     all_weeks = all_weeks_df["Week"].tolist()
     recent_weeks = all_weeks[-4:]
