@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Constants
 SHAREPOINT_URL = "https://impelsysinc-my.sharepoint.com/:x:/g/personal/anandu_m_medlern_com/EXxi7DECTpxDgA-Hx44P-G8B-PgU74kHUVKlz3VfbTNX5w?download=1"
@@ -40,11 +40,13 @@ def preprocess_data(df):
     df["Story Points"] = pd.to_numeric(df["Story Points"], errors="coerce").fillna(0)
     df["Status"] = df["Status"].fillna("")
     df["Week"] = df["Due Date"].dt.strftime("%Y-%W")
+    df["Week Start"] = df["Due Date"].dt.to_period("W").apply(lambda r: r.start_time)
     df["Is Completed"] = df["Status"].str.upper().isin(COMPLETED_STATUSES)
     return df
 
 def get_week_options(df):
-    return sorted(df["Week"].dropna().unique())
+    week_map = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
+    return week_map.sort_values("Week Start").reset_index(drop=True)
 
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
@@ -56,9 +58,11 @@ def main():
             st.stop()
         df = preprocess_data(df)
 
-    week_options = get_week_options(df)
-    selected_weeks = st.multiselect("Select week(s) to view:", week_options, default=week_options[-1:])
-    filtered_df = df[df["Week"].isin(selected_weeks)]
+    week_options_df = get_week_options(df)
+    week_label_map = {row["Week"]: f"{row['Week']} ({row['Week Start'].date()} to {(row['Week Start'] + timedelta(days=4)).date()})" for _, row in week_options_df.iterrows()}
+    selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
+
+    filtered_df = df[df["Week"] == selected_week]
 
     st.subheader("Developer Productivity Summary")
     completed_df = filtered_df[filtered_df["Is Completed"]]
@@ -68,27 +72,20 @@ def main():
     data = []
     for dev in sorted(all_developers):
         points = developer_points.get(dev, 0)
-        data.append({"Developer": dev, "Completed Points": points})
+        productivity = f"{(points / 5 * 100):.1f}%" if points <= 5 else "100.0%+"
+        data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity})
 
     summary_df = pd.DataFrame(data)
-    total_points = summary_df["Completed Points"].sum()
-    summary_df["% of Total"] = summary_df["Completed Points"].apply(lambda x: f"{(x / total_points * 100):.1f}%" if total_points else "0.0%")
     st.dataframe(summary_df)
 
     st.subheader("Team Overview")
-    if not completed_df.empty:
-        team_summary = completed_df.groupby("Week")["Story Points"].sum().reset_index()
-    else:
-        team_summary = pd.DataFrame({"Week": selected_weeks, "Story Points": [0]*len(selected_weeks)})
+    team_summary = pd.DataFrame({"Week": [selected_week], "Story Points": [completed_df["Story Points"].sum()]})
     st.dataframe(team_summary)
 
     st.subheader("Detailed Task Table")
     st.dataframe(filtered_df[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points", "Week"]])
 
-    if not team_summary.empty:
-        st.download_button("Download Summary CSV", data=team_summary.to_csv(index=False), file_name="team_productivity.csv")
-    else:
-        st.info("No data available to download for the selected filter.")
+    st.download_button("Download Summary CSV", data=team_summary.to_csv(index=False), file_name="team_productivity.csv")
 
 if __name__ == "__main__":
     main()
