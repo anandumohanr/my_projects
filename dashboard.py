@@ -83,13 +83,16 @@ def render_summary_tab(df, selected_week):
 
     if len(recent_weeks) >= 2:
         trend_data = df_dev[df_dev["Week"].isin(recent_weeks)].groupby(["Developer", "Week"])["Story Points"].sum().unstack(fill_value=0)
-        trend_data["Delta"] = trend_data[recent_weeks[-1]] - trend_data[recent_weeks[-2]]
-        if not trend_data.empty:
-            most_improved = trend_data["Delta"].idxmax(), trend_data["Delta"].max()
-            largest_drop = trend_data["Delta"].idxmin(), trend_data["Delta"].min()
-            consistent_mask = (trend_data[recent_weeks] > 3).all(axis=1)
-            consistent = trend_data[consistent_mask].index.tolist()
-            consistent_performer = consistent[0] if consistent else None
+        try:
+            trend_data["Delta"] = trend_data[recent_weeks[-1]] - trend_data[recent_weeks[-2]]
+            if not trend_data.empty:
+                most_improved = trend_data["Delta"].idxmax(), trend_data["Delta"].max()
+                largest_drop = trend_data["Delta"].idxmin(), trend_data["Delta"].min()
+                consistent_mask = (trend_data[recent_weeks] > 3).all(axis=1)
+                consistent = trend_data[consistent_mask].index.tolist()
+                consistent_performer = consistent[0] if consistent else None
+        except Exception:
+            pass
 
     st.markdown("### Insights")
     st.markdown("**Top 3 Developers**")
@@ -125,7 +128,31 @@ def render_summary_tab(df, selected_week):
 
     return summary_df, team_summary
 
-# other functions remain unchanged
+def main():
+    st.set_page_config(page_title="Team Productivity Dashboard", layout="wide")
+
+    st.title("📊 Development Team Productivity Dashboard")
+
+    df = load_excel()
+    if df.empty:
+        st.warning("No data available to display.")
+        st.stop()
+
+    df = preprocess_data(df)
+    week_options = get_week_options(df)
+
+    if week_options.empty:
+        st.warning("No valid week data found.")
+        st.stop()
+
+    week_labels = [f"{row['Week']} ({row['Week Start'].strftime('%b %d')})" for _, row in week_options.iterrows()]
+    selected = st.selectbox("Select week to view:", options=week_labels)
+
+    if selected:
+        selected_week = selected.split()[0]
+        tabs = st.tabs(["Summary", "Trends", "Tasks", "Export"])
+        with tabs[0]:
+            render_summary_tab(df, selected_week)
 
 if __name__ == "__main__":
     main()
