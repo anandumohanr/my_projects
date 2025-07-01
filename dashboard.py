@@ -77,11 +77,6 @@ def render_summary_tab(df, selected_week):
     st.markdown("### Insights")
     st.markdown("**Top 3 Developers**")
     st.dataframe(top_3)
-    st.markdown("**Developers with 0 Productivity**")
-    if zero_productivity.empty:
-        st.write("None")
-    else:
-        st.dataframe(zero_productivity)
 
     st.subheader("Team Overview")
     team_summary = pd.DataFrame({
