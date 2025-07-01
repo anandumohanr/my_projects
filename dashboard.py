@@ -160,7 +160,7 @@ def main():
             st.cache_data.clear()
             st.success("✅ Data refreshed successfully")
             time.sleep(1)
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         st.caption(f"Last data refresh: {now_ist}")
 
