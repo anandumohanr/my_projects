@@ -39,6 +39,9 @@ def get_week_options(df):
 
 def plot_productivity_bar(df, title, by="Developer"):
     summary = df.groupby(by)["Story Points"].sum().sort_values(ascending=False)
+    if summary.empty:
+        st.warning("No completed tasks to plot for selected filter.")
+        return
     fig, ax = plt.subplots()
     summary.plot(kind="bar", ax=ax)
     ax.set_title(title)
@@ -64,13 +67,19 @@ def main():
     plot_productivity_bar(completed_df, "Completed Story Points per Developer")
 
     st.subheader("Team Overview")
-    team_summary = completed_df.groupby("Week")["Story Points"].sum().reset_index()
+    if not completed_df.empty:
+        team_summary = completed_df.groupby("Week")["Story Points"].sum().reset_index()
+    else:
+        team_summary = pd.DataFrame({"Week": selected_weeks, "Story Points": [0]*len(selected_weeks)})
     st.dataframe(team_summary)
 
     st.subheader("Detailed Task Table")
     st.dataframe(filtered_df[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points", "Week"]])
 
-    st.download_button("Download Summary CSV", data=team_summary.to_csv(index=False), file_name="team_productivity.csv")
+    if not team_summary.empty:
+        st.download_button("Download Summary CSV", data=team_summary.to_csv(index=False), file_name="team_productivity.csv")
+    else:
+        st.info("No data available to download for the selected filter.")
 
 if __name__ == "__main__":
     main()
