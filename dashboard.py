@@ -91,7 +91,7 @@ def render_summary_tab(df, selected_week):
     st.dataframe(team_summary)
 
     st.markdown("### Team Productivity Chart")
-    fig, ax = plt.subplots(figsize=(4, 2))
+    fig, ax = plt.subplots(figsize=(3, 1.5))
     ax.plot([selected_week], [total_completed], marker='o')
     ax.set_ylabel("Story Points")
     ax.set_title("Team Productivity for Selected Week")
@@ -102,9 +102,13 @@ def render_summary_tab(df, selected_week):
 def render_trend_tab(df):
     st.subheader("Multi-week Team Productivity Trend")
     df_completed = df[df["Is Completed"]].copy()
-    weekly_summary = df_completed.groupby("Week")["Story Points"].sum().reset_index()
+    all_weeks = df["Week"].sort_values().unique()
+
+    weekly_summary = df_completed.groupby("Week")["Story Points"].sum().reindex(all_weeks, fill_value=0).reset_index()
+    weekly_summary.columns = ["Week", "Story Points"]
+
     if not weekly_summary.empty:
-        fig, ax = plt.subplots(figsize=(4, 2))
+        fig, ax = plt.subplots(figsize=(3, 1.5))
         ax.plot(weekly_summary["Week"], weekly_summary["Story Points"], marker='o')
         ax.set_ylabel("Total Completed Story Points")
         ax.set_title("Weekly Productivity Trend")
@@ -118,10 +122,11 @@ def render_trend_tab(df):
     dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
     df_dev = df[df["Developer"] == dev_option]
     df_dev_completed = df_dev[df_dev["Is Completed"]]
-    weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().reset_index()
+    weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().reindex(all_weeks, fill_value=0).reset_index()
+    weekly_dev.columns = ["Week", "Story Points"]
 
     if not weekly_dev.empty:
-        fig, ax = plt.subplots(figsize=(4, 2))
+        fig, ax = plt.subplots(figsize=(3, 1.5))
         ax.plot(weekly_dev["Week"], weekly_dev["Story Points"], marker='o')
         ax.set_ylabel("Completed Story Points")
         ax.set_title(f"{dev_option} Productivity (Last 4 Weeks)")
