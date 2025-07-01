@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import altair as alt
 import pytz
+import time
 
 # Constants
 SHAREPOINT_URL = "https://impelsysinc-my.sharepoint.com/:x:/g/personal/anandu_m_medlern_com/EXxi7DECTpxDgA-Hx44P-G8B-PgU74kHUVKlz3VfbTNX5w?download=1"
@@ -22,7 +23,7 @@ DEVELOPERS = [
     "padmaja"
 ]
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=14400, show_spinner=False)  # Auto-refresh every 4 hours (14400 seconds)
 def load_excel():
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -57,12 +58,12 @@ def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
     filtered_df = df[df["Week"] == selected_week]
     completed_df = filtered_df[filtered_df["Is Completed"]]
-    developer_points = completed_df.groupby("Developer")["Story Points"].sum().to_dict()
+    developer_points = completed_df.groupby("Developer")["Story Points"].sum().astype(int).to_dict()
 
     all_developers = set(DEVELOPERS).union(set(developer_points.keys()))
     data = []
     for dev in sorted(all_developers):
-        points = int(developer_points.get(dev, 0))
+        points = developer_points.get(dev, 0)
         productivity_percent = round(points / 5 * 100, 1)
         productivity_display = f"{productivity_percent}%" if productivity_percent <= 100 else "100.0%+"
         data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity_display})
@@ -117,7 +118,7 @@ def render_trend_tab(df):
     dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
     df_dev = df[df["Developer"] == dev_option]
     df_dev_completed = df_dev[df_dev["Is Completed"]]
-    weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().reindex(recent_weeks, fill_value=0).reset_index()
+    weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().astype(int).reindex(recent_weeks, fill_value=0).reset_index()
     weekly_dev.columns = ["Week", "Story Points"]
 
     if not weekly_dev.empty:
@@ -150,6 +151,12 @@ def render_export_tab(team_summary):
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
     st.title("📊 Weekly Productivity Dashboard")
+
+    if st.button("🔄 Refresh Now"):
+        st.cache_data.clear()
+        st.success("✅ Data refreshed successfully")
+        time.sleep(1)
+        st.experimental_rerun()
 
     with st.spinner("Fetching and processing data from SharePoint..."):
         df = load_excel()
