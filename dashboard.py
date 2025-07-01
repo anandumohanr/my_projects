@@ -103,6 +103,14 @@ def render_summary_tab(df, selected_week):
     return summary_df, team_summary
 
 def render_trend_tab(df):
+    df_completed = df[df["Is Completed"]].copy()
+    all_weeks_df = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
+    all_weeks_df = all_weeks_df.sort_values("Week Start").reset_index(drop=True)
+    all_weeks = all_weeks_df["Week"].tolist()
+
+    weekly_summary = df_completed.groupby("Week")["Story Points"].sum().reindex(all_weeks, fill_value=0).reset_index()
+    weekly_summary.columns = ["Week", "Story Points"]
+
     st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
     dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
     df_dev = df[df["Developer"] == dev_option]
