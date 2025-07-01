@@ -49,23 +49,9 @@ def get_week_options(df):
     week_map = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
     return week_map.sort_values("Week Start").reset_index(drop=True)
 
-def main():
-    st.set_page_config("Productivity Dashboard", layout="wide")
-    st.title("\U0001F4CA Weekly Productivity Dashboard")
-
-    with st.status("Fetching and processing data from SharePoint..."):
-        df = load_excel()
-        if df.empty:
-            st.stop()
-        df = preprocess_data(df)
-
-    week_options_df = get_week_options(df)
-    week_label_map = {row["Week"]: f"{row['Week']} ({row['Week Start'].date()} to {(row['Week Start'] + timedelta(days=4)).date()})" for _, row in week_options_df.iterrows()}
-    selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
-
-    filtered_df = df[df["Week"] == selected_week]
-
+def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
+    filtered_df = df[df["Week"] == selected_week]
     completed_df = filtered_df[filtered_df["Is Completed"]]
     developer_points = completed_df.groupby("Developer")["Story Points"].sum().to_dict()
 
@@ -80,18 +66,21 @@ def main():
     summary_df = pd.DataFrame(data)
     st.dataframe(summary_df)
 
-    # Team Productivity Summary
     total_possible = len(all_developers) * 5
     total_completed = summary_df["Completed Points"].sum()
     team_productivity = round((total_completed / total_possible) * 100, 1) if total_possible else 0.0
 
-    st.subheader("Developer-wise Completed Points")
-    fig, ax = plt.subplots(figsize=(8, 4))
-    summary_df.set_index("Developer")["Completed Points"].plot(kind="line", marker='o', ax=ax)
-    ax.set_ylabel("Story Points")
-    ax.set_title("Completed Story Points by Developer")
-    ax.grid(True)
-    st.pyplot(fig)
+    top_3 = summary_df.sort_values("Completed Points", ascending=False).head(3)
+    zero_productivity = summary_df[summary_df["Completed Points"] == 0]
+
+    st.markdown("### Insights")
+    st.markdown("**Top 3 Developers**")
+    st.dataframe(top_3)
+    st.markdown("**Developers with 0 Productivity**")
+    if zero_productivity.empty:
+        st.write("None")
+    else:
+        st.dataframe(zero_productivity)
 
     st.subheader("Team Overview")
     team_summary = pd.DataFrame({
@@ -101,10 +90,70 @@ def main():
     })
     st.dataframe(team_summary)
 
+    # Team productivity chart
+    st.markdown("### Team Productivity Chart")
+    fig, ax = plt.subplots(figsize=(6, 3))
+    ax.plot([selected_week], [total_completed], marker='o')
+    ax.set_ylabel("Story Points")
+    ax.set_title("Team Productivity for Selected Week")
+    st.pyplot(fig)
+
+    return summary_df, team_summary
+
+def render_trend_tab(df):
+    st.subheader("Multi-week Team Productivity Trend")
+    df_completed = df[df["Is Completed"]].copy()
+    weekly_summary = df_completed.groupby("Week")["Story Points"].sum().reset_index()
+    if not weekly_summary.empty:
+        fig, ax = plt.subplots(figsize=(6, 3))
+        ax.plot(weekly_summary["Week"], weekly_summary["Story Points"], marker='o')
+        ax.set_ylabel("Total Completed Story Points")
+        ax.set_title("Weekly Productivity Trend")
+        ax.grid(True)
+        plt.xticks(rotation=45)
+        st.pyplot(fig)
+    else:
+        st.info("No completed data to show trend.")
+
+def render_tasks_tab(df, selected_week):
     st.subheader("Detailed Task Table")
+    filtered_df = df[df["Week"] == selected_week]
     st.dataframe(filtered_df[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points", "Week"]])
 
+def render_export_tab(team_summary):
+    st.subheader("Export Summary")
     st.download_button("Download Summary CSV", data=team_summary.to_csv(index=False), file_name="team_productivity.csv")
+
+def main():
+    st.set_page_config("Productivity Dashboard", layout="wide")
+    st.title("\U0001F4CA Weekly Productivity Dashboard")
+
+    with st.spinner("Fetching and processing data from SharePoint..."):
+        df = load_excel()
+        if df.empty:
+            st.stop()
+        df = preprocess_data(df)
+
+    week_options_df = get_week_options(df)
+    week_label_map = {row["Week"]: f"{row['Week']} ({row['Week Start'].date()} to {(row['Week Start'] + timedelta(days=4)).date()})" for _, row in week_options_df.iterrows()}
+    selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
+
+    tabs = st.tabs(["Summary", "Trends", "Tasks", "Export"])
+
+    with tabs[0]:
+        summary_df, team_summary = render_summary_tab(df, selected_week)
+
+    with tabs[1]:
+        render_trend_tab(df)
+
+    with tabs[2]:
+        render_tasks_tab(df, selected_week)
+
+    with tabs[3]:
+        render_export_tab(team_summary)
+
+    st.markdown("<hr/>", unsafe_allow_html=True)
+    st.caption(f"Last data refresh: {datetime.now().astimezone().strftime('%Y-%m-%d %I:%M %p %Z')}")
 
 if __name__ == "__main__":
     main()
