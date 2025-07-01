@@ -56,7 +56,7 @@ def get_week_options(df):
 
 def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
-
+    
     # Only completed tasks for selected week
     filtered_df = df[df["Week"] == selected_week]
     completed_df = filtered_df[filtered_df["Is Completed"]]
@@ -83,7 +83,7 @@ def render_summary_tab(df, selected_week):
 
     # Sort by productivity %
     summary_df = pd.DataFrame(data)
-    summary_df["SortKey"] = summary_df["Productivity % (out of 5 SP)"].str.replace('%', '', regex=True).str.replace('+', '', regex=True).astype(float)
+    summary_df["SortKey"] = summary_df["Productivity % (out of 5 SP)"].str.replace('%', '').str.replace('+', '').astype(float)
     summary_df = summary_df.sort_values("SortKey", ascending=False).drop(columns="SortKey")
 
     def highlight_low_productivity(val):
@@ -100,12 +100,9 @@ def render_summary_tab(df, selected_week):
     total_completed = summary_df["Completed Points"].sum()
     team_productivity = round((total_completed / total_possible) * 100, 1) if total_possible else 0.0
 
-    # JIRA ticket link base
-    JIRA_BASE_URL = "https://impelsys.atlassian.net/browse/"
-
     st.markdown("**Active Developers with In-Progress Tasks**")
     active_in_progress = summary_df[summary_df["In Progress Points"] > 0]
-
+    
     if active_in_progress.empty:
         st.write("None")
     else:
@@ -114,15 +111,16 @@ def render_summary_tab(df, selected_week):
             dev_tasks = in_progress_df_all[in_progress_df_all["Developer"] == dev]
             due_dates = dev_tasks["Due Date"].dropna().dt.strftime("%d-%b-%Y").unique()
             due_str = ", ".join(sorted(due_dates))
-
+    
             st.markdown(f"🚧 **{dev}** is working on **{row['In Progress Points']} SP** task(s), due on: *{due_str}*")
-
+    
             with st.expander(f"See in-progress tasks for {dev}"):
                 if not dev_tasks.empty:
                     display_df = dev_tasks[["Key", "Summary", "Status", "Due Date", "Story Points"]].copy()
-                    display_df["Ticket"] = display_df["Key"].apply(lambda k: f"[{k}]({JIRA_BASE_URL}{k})" if isinstance(k, str) else "")
+                    display_df["Key"] = display_df["Key"].apply(
+                        lambda x: f"[{x}]({x})" if isinstance(x, str) and x.startswith("http") else x
+                    )
                     display_df["Due Date"] = display_df["Due Date"].dt.strftime("%d-%b-%Y")
-                    display_df = display_df[["Ticket", "Summary", "Status", "Due Date", "Story Points"]]
                     st.markdown(display_df.to_markdown(index=False), unsafe_allow_html=True)
                 else:
                     st.write("No task details available.")
@@ -136,7 +134,7 @@ def render_summary_tab(df, selected_week):
     st.dataframe(team_summary)
 
     return summary_df, team_summary
-    
+
 def render_trend_tab(df):
     st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
     today = datetime.today()
