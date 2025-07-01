@@ -66,7 +66,16 @@ def render_summary_tab(df, selected_week):
         data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity_display})
 
     summary_df = pd.DataFrame(data)
-    st.dataframe(summary_df)
+
+    def highlight_low_productivity(val):
+        try:
+            pct = float(str(val).strip('%').replace('+', ''))
+            return 'color: red' if pct < 80 else ''
+        except:
+            return ''
+
+    styled_summary = summary_df.style.applymap(highlight_low_productivity, subset=["Productivity % (out of 5 SP)"])
+    st.dataframe(styled_summary)
 
     total_possible = len(all_developers) * 5
     total_completed = summary_df["Completed Points"].sum()
@@ -78,6 +87,11 @@ def render_summary_tab(df, selected_week):
     st.markdown("### Insights")
     st.markdown("**Top 3 Developers**")
     st.dataframe(top_3)
+    st.markdown("**Developers with 0 Productivity**")
+    if zero_productivity.empty:
+        st.write("None")
+    else:
+        st.dataframe(zero_productivity)
 
     st.subheader("Team Overview")
     team_summary = pd.DataFrame({
@@ -87,37 +101,44 @@ def render_summary_tab(df, selected_week):
     })
     st.dataframe(team_summary)
 
+    st.markdown("### Team Productivity Chart")
+    chart_data = pd.DataFrame({"Week": [selected_week], "Story Points": [total_completed]})
+    chart = alt.Chart(chart_data).mark_line(point=True).encode(
+        x=alt.X("Week:N", title="Week"),
+        y=alt.Y("Story Points:Q", title="Total Story Points"),
+        tooltip=["Week", "Story Points"]
+    ).properties(height=250)
+    st.altair_chart(chart, use_container_width=True)
+
     return summary_df, team_summary
 
 def render_trend_tab(df):
-    df_completed = df[df["Is Completed"]].copy()
+    st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
     all_weeks_df = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
     all_weeks_df = all_weeks_df.sort_values("Week Start").reset_index(drop=True)
     all_weeks = all_weeks_df["Week"].tolist()
+    recent_weeks = all_weeks[-4:]
 
-    weekly_summary = df_completed.groupby("Week")["Story Points"].sum().reindex(all_weeks, fill_value=0).reset_index()
-    weekly_summary.columns = ["Week", "Story Points"]
-
-    st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
     dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
     df_dev = df[df["Developer"] == dev_option]
     df_dev_completed = df_dev[df_dev["Is Completed"]]
-    weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().reindex(all_weeks, fill_value=0).reset_index()
+    weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().reindex(recent_weeks, fill_value=0).reset_index()
     weekly_dev.columns = ["Week", "Story Points"]
 
     if not weekly_dev.empty:
         weekly_dev["Delta"] = weekly_dev["Story Points"].diff().fillna(0)
-        weekly_dev["Trend"] = weekly_dev["Delta"].apply(lambda x: "⬆️" if x > 0 else ("⬇️" if x < 0 else "➖"))
+        weekly_dev["Color"] = weekly_dev["Delta"].apply(lambda x: "green" if x > 0 else ("red" if x < 0 else "gray"))
 
         dev_chart = alt.Chart(weekly_dev).mark_line(point=True).encode(
             x=alt.X("Week:N", title="Week"),
             y=alt.Y("Story Points:Q", title="Story Points"),
-            tooltip=["Week", "Story Points", "Trend"]
+            color=alt.Color("Color:N", scale=None),
+            tooltip=["Week", "Story Points", "Delta"]
         ).properties(title=f"{dev_option} Productivity (Last 4 Weeks)", height=250)
         st.altair_chart(dev_chart, use_container_width=True)
 
         st.markdown("#### Tabular View")
-        st.dataframe(weekly_dev[["Week", "Story Points", "Trend"]])
+        st.dataframe(weekly_dev[["Week", "Story Points", "Delta"]])
     else:
         st.info("No completed tasks found for selected developer.")
 
@@ -162,6 +183,6 @@ def main():
     ist = pytz.timezone("Asia/Kolkata")
     now_ist = datetime.now(ist).strftime('%Y-%m-%d %I:%M %p %Z')
     st.caption(f"Last data refresh: {now_ist}")
-    
+
 if __name__ == "__main__":
     main()
