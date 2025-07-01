@@ -74,46 +74,14 @@ def render_summary_tab(df, selected_week):
     top_3 = summary_df.sort_values("Completed Points", ascending=False).head(3)
     zero_productivity = summary_df[summary_df["Completed Points"] == 0]
 
-    most_improved = None
-    largest_drop = None
-    consistent_performer = None
-
-    df_dev = df[df["Developer"].isin(all_developers) & df["Is Completed"]]
-    recent_weeks = sorted(df_dev["Week"].unique())[-4:]
-
-    if recent_weeks:
-        trend_data = df_dev[df_dev["Week"].isin(recent_weeks)].groupby(["Developer", "Week"])["Story Points"].sum().unstack(fill_value=0)
-        trend_data["Delta"] = trend_data[recent_weeks[-1]] - trend_data[recent_weeks[-2]]
-        if not trend_data.empty:
-            most_improved = trend_data["Delta"].idxmax(), trend_data["Delta"].max()
-            largest_drop = trend_data["Delta"].idxmin(), trend_data["Delta"].min()
-            consistent_mask = (trend_data[recent_weeks] > 3).all(axis=1)
-            consistent = trend_data[consistent_mask].index.tolist()
-            consistent_performer = consistent[0] if consistent else None
-
     st.markdown("### Insights")
     st.markdown("**Top 3 Developers**")
     st.dataframe(top_3)
     st.markdown("**Developers with 0 Productivity**")
-    st.write("None" if zero_productivity.empty else zero_productivity)
-
-    st.markdown("**Most Improved Developer**")
-    if most_improved:
-        st.write(f"⬆️ {most_improved[0]} (+{most_improved[1]} SP)")
+    if zero_productivity.empty:
+        st.write("None")
     else:
-        st.write("N/A")
-
-    st.markdown("**Largest Drop in Productivity**")
-    if largest_drop:
-        st.write(f"⬇️ {largest_drop[0]} ({largest_drop[1]} SP)")
-    else:
-        st.write("N/A")
-
-    st.markdown("**Consistent Performer (4 Weeks > 3 SP)**")
-    if consistent_performer:
-        st.write(f"🏆 {consistent_performer}")
-    else:
-        st.write("N/A")
+        st.dataframe(zero_productivity)
 
     st.subheader("Team Overview")
     team_summary = pd.DataFrame({
@@ -123,14 +91,42 @@ def render_summary_tab(df, selected_week):
     })
     st.dataframe(team_summary)
 
+    st.markdown("### Team Productivity Chart")
+    chart_data = pd.DataFrame({"Week": [selected_week], "Story Points": [total_completed]})
+    chart = alt.Chart(chart_data).mark_line(point=True).encode(
+        x=alt.X("Week:N", title="Week"),
+        y=alt.Y("Story Points:Q", title="Total Story Points"),
+        tooltip=["Week", "Story Points"]
+    ).properties(height=250)
+    st.altair_chart(chart, use_container_width=True)
+
     return summary_df, team_summary
 
 def render_trend_tab(df):
-    st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
+    st.subheader("Multi-week Team Productivity Trend")
+    df_completed = df[df["Is Completed"]].copy()
     all_weeks_df = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
     all_weeks_df = all_weeks_df.sort_values("Week Start").reset_index(drop=True)
     all_weeks = all_weeks_df["Week"].tolist()
 
+    weekly_summary = df_completed.groupby("Week")["Story Points"].sum().reindex(all_weeks, fill_value=0).reset_index()
+    weekly_summary.columns = ["Week", "Story Points"]
+
+    if not weekly_summary.empty:
+        weekly_summary["Delta"] = weekly_summary["Story Points"].diff().fillna(0)
+        weekly_summary["Trend"] = weekly_summary["Delta"].apply(lambda x: "⬆️" if x > 0 else ("⬇️" if x < 0 else "➖"))
+
+        line_chart = alt.Chart(weekly_summary).mark_line(point=True).encode(
+            x=alt.X("Week:N", title="Week"),
+            y=alt.Y("Story Points:Q", title="Story Points"),
+            tooltip=["Week", "Story Points", "Trend"]
+        ).properties(title="Weekly Productivity Trend", height=250)
+        st.altair_chart(line_chart, use_container_width=True)
+        st.dataframe(weekly_summary[["Week", "Story Points", "Trend"]])
+    else:
+        st.info("No completed data to show trend.")
+
+    st.markdown("### Developer Productivity Trend (Last 4 Weeks)")
     dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
     df_dev = df[df["Developer"] == dev_option]
     df_dev_completed = df_dev[df_dev["Is Completed"]]
@@ -140,15 +136,13 @@ def render_trend_tab(df):
     if not weekly_dev.empty:
         weekly_dev["Delta"] = weekly_dev["Story Points"].diff().fillna(0)
         weekly_dev["Trend"] = weekly_dev["Delta"].apply(lambda x: "⬆️" if x > 0 else ("⬇️" if x < 0 else "➖"))
-        weekly_dev["Color"] = weekly_dev["Delta"].apply(lambda x: "green" if x > 0 else ("red" if x < 0 else "gray"))
 
-        chart = alt.Chart(weekly_dev).mark_line(point=True).encode(
+        dev_chart = alt.Chart(weekly_dev).mark_line(point=True).encode(
             x=alt.X("Week:N", title="Week"),
             y=alt.Y("Story Points:Q", title="Story Points"),
-            color=alt.Color("Color:N", scale=None, legend=None),
             tooltip=["Week", "Story Points", "Trend"]
         ).properties(title=f"{dev_option} Productivity (Last 4 Weeks)", height=250)
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(dev_chart, use_container_width=True)
 
         st.markdown("#### Tabular View")
         st.dataframe(weekly_dev[["Week", "Story Points", "Trend"]])
