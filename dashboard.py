@@ -92,7 +92,7 @@ def render_summary_tab(df, selected_week):
 
     # Team productivity chart
     st.markdown("### Team Productivity Chart")
-    fig, ax = plt.subplots(figsize=(6, 3))
+    fig, ax = plt.subplots(figsize=(4, 2))
     ax.plot([selected_week], [total_completed], marker='o')
     ax.set_ylabel("Story Points")
     ax.set_title("Team Productivity for Selected Week")
@@ -105,7 +105,7 @@ def render_trend_tab(df):
     df_completed = df[df["Is Completed"]].copy()
     weekly_summary = df_completed.groupby("Week")["Story Points"].sum().reset_index()
     if not weekly_summary.empty:
-        fig, ax = plt.subplots(figsize=(6, 3))
+        fig, ax = plt.subplots(figsize=(4, 2))
         ax.plot(weekly_summary["Week"], weekly_summary["Story Points"], marker='o')
         ax.set_ylabel("Total Completed Story Points")
         ax.set_title("Weekly Productivity Trend")
