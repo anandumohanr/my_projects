@@ -101,7 +101,7 @@ def render_summary_tab(df, selected_week):
     team_productivity = round((total_completed / total_possible) * 100, 1) if total_possible else 0.0
 
     st.markdown("**Active Developers with In-Progress Tasks**")
-    active_in_progress = summary_df[(summary_df["Completed Points"] == 0) & (summary_df["In Progress Points"] > 0)]
+    active_in_progress = summary_df[summary_df["In Progress Points"] > 0]
     
     if active_in_progress.empty:
         st.write("None")
@@ -116,11 +116,12 @@ def render_summary_tab(df, selected_week):
     
             with st.expander(f"See in-progress tasks for {dev}"):
                 if not dev_tasks.empty:
-                    task_info = dev_tasks[["Key", "Summary"]].copy()
-                    task_info["Key"] = task_info["Key"].apply(
+                    display_df = dev_tasks[["Key", "Summary", "Status", "Due Date", "Story Points"]].copy()
+                    display_df["Key"] = display_df["Key"].apply(
                         lambda x: f"[{x}]({x})" if isinstance(x, str) and x.startswith("http") else x
                     )
-                    st.markdown(task_info.to_markdown(index=False), unsafe_allow_html=True)
+                    display_df["Due Date"] = display_df["Due Date"].dt.strftime("%d-%b-%Y")
+                    st.markdown(display_df.to_markdown(index=False), unsafe_allow_html=True)
                 else:
                     st.write("No task details available.")
 
