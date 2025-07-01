@@ -58,15 +58,24 @@ def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
     filtered_df = df[df["Week"] == selected_week]
     completed_df = filtered_df[filtered_df["Is Completed"]]
-    developer_points = completed_df.groupby("Developer")["Story Points"].sum().astype(int).to_dict()
+    in_progress_df = filtered_df[~filtered_df["Is Completed"]]
 
-    all_developers = set(DEVELOPERS).union(set(developer_points.keys()))
+    developer_completed = completed_df.groupby("Developer")["Story Points"].sum().astype(int).to_dict()
+    developer_inprogress = in_progress_df.groupby("Developer")["Story Points"].sum().astype(int).to_dict()
+
+    all_developers = set(DEVELOPERS).union(set(developer_completed.keys())).union(set(developer_inprogress.keys()))
     data = []
     for dev in sorted(all_developers):
-        points = developer_points.get(dev, 0)
-        productivity_percent = round(points / 5 * 100, 1)
+        completed = developer_completed.get(dev, 0)
+        inprogress = developer_inprogress.get(dev, 0)
+        productivity_percent = round(completed / 5 * 100, 1)
         productivity_display = f"{productivity_percent}%" if productivity_percent <= 100 else "100.0%+"
-        data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity_display})
+        data.append({
+            "Developer": dev,
+            "Completed Points": completed,
+            "In Progress Points": inprogress,
+            "Productivity % (out of 5 SP)": productivity_display
+        })
 
     summary_df = pd.DataFrame(data)
 
@@ -95,6 +104,14 @@ def render_summary_tab(df, selected_week):
         st.write("None")
     else:
         st.dataframe(zero_productivity)
+
+    st.markdown("**Active Developers with In-Progress Tasks**")
+    active_in_progress = summary_df[(summary_df["Completed Points"] == 0) & (summary_df["In Progress Points"] > 0)]
+    if active_in_progress.empty:
+        st.write("None")
+    else:
+        for _, row in active_in_progress.iterrows():
+            st.markdown(f"🚧 {row['Developer']} is working on {row['In Progress Points']} SP task(s) likely due next week")
 
     st.subheader("Team Overview")
     team_summary = pd.DataFrame({
