@@ -101,15 +101,6 @@ def render_summary_tab(df, selected_week):
     })
     st.dataframe(team_summary)
 
-    st.markdown("### Team Productivity Chart")
-    chart_data = pd.DataFrame({"Week": [selected_week], "Story Points": [total_completed]})
-    chart = alt.Chart(chart_data).mark_line(point=True).encode(
-        x=alt.X("Week:N", title="Week"),
-        y=alt.Y("Story Points:Q", title="Total Story Points"),
-        tooltip=["Week", "Story Points"]
-    ).properties(height=250)
-    st.altair_chart(chart, use_container_width=True)
-
     return summary_df, team_summary
 
 def render_trend_tab(df):
