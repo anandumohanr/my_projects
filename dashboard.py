@@ -102,14 +102,27 @@ def render_summary_tab(df, selected_week):
 
     st.markdown("**Active Developers with In-Progress Tasks**")
     active_in_progress = summary_df[(summary_df["Completed Points"] == 0) & (summary_df["In Progress Points"] > 0)]
+    
     if active_in_progress.empty:
         st.write("None")
     else:
         for _, row in active_in_progress.iterrows():
-            dev_tasks = in_progress_df_all[in_progress_df_all["Developer"] == row["Developer"]]
+            dev = row["Developer"]
+            dev_tasks = in_progress_df_all[in_progress_df_all["Developer"] == dev]
             due_dates = dev_tasks["Due Date"].dropna().dt.strftime("%d-%b-%Y").unique()
             due_str = ", ".join(sorted(due_dates))
-            st.markdown(f"🚧 {row['Developer']} is working on {row['In Progress Points']} SP task(s) due on: {due_str}")
+    
+            st.markdown(f"🚧 **{dev}** is working on **{row['In Progress Points']} SP** task(s), due on: *{due_str}*")
+    
+            with st.expander(f"See in-progress tasks for {dev}"):
+                if not dev_tasks.empty:
+                    task_info = dev_tasks[["Key", "Summary"]].copy()
+                    task_info["Key"] = task_info["Key"].apply(
+                        lambda x: f"[{x}]({x})" if isinstance(x, str) and x.startswith("http") else x
+                    )
+                    st.markdown(task_info.to_markdown(index=False), unsafe_allow_html=True)
+                else:
+                    st.write("No task details available.")
 
     st.subheader("Team Overview")
     team_summary = pd.DataFrame({
