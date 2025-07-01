@@ -6,7 +6,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 
 # Constants
-SHAREPOINT_URL = "https://impelsysinc-my.sharepoint.com/:u:/g/personal/anandu_m_medlern_com/EXxi7DECTpxDgA-Hx44P-G8B87HInE5ZmxBDztalpz_zTA?download=1"
+SHAREPOINT_URL = "https://impelsysinc-my.sharepoint.com/:x:/g/personal/anandu_m_medlern_com/EXxi7DECTpxDgA-Hx44P-G8B-PgU74kHUVKlz3VfbTNX5w?download=1"
 COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
 
 @st.cache_data(show_spinner=False)
