@@ -56,14 +56,18 @@ def get_week_options(df):
 
 def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
+    
+    # Only completed tasks for selected week
     filtered_df = df[df["Week"] == selected_week]
     completed_df = filtered_df[filtered_df["Is Completed"]]
-    in_progress_df = filtered_df[~filtered_df["Is Completed"]]
+
+    # All in-progress tasks regardless of week
+    in_progress_df_all = df[~df["Is Completed"]]
 
     developer_completed = completed_df.groupby("Developer")["Story Points"].sum().astype(int).to_dict()
-    developer_inprogress = in_progress_df.groupby("Developer")["Story Points"].sum().astype(int).to_dict()
+    developer_inprogress = in_progress_df_all.groupby("Developer")["Story Points"].sum().astype(int).to_dict()
 
-    all_developers = set(DEVELOPERS).union(set(developer_completed.keys())).union(set(developer_inprogress.keys()))
+    all_developers = set(DEVELOPERS).union(developer_completed).union(developer_inprogress)
     data = []
     for dev in sorted(all_developers):
         completed = developer_completed.get(dev, 0)
@@ -77,7 +81,10 @@ def render_summary_tab(df, selected_week):
             "Productivity % (out of 5 SP)": productivity_display
         })
 
+    # Sort by productivity %
     summary_df = pd.DataFrame(data)
+    summary_df["SortKey"] = summary_df["Productivity % (out of 5 SP)"].str.replace('%', '').str.replace('+', '').astype(float)
+    summary_df = summary_df.sort_values("SortKey", ascending=False).drop(columns="SortKey")
 
     def highlight_low_productivity(val):
         try:
@@ -99,7 +106,7 @@ def render_summary_tab(df, selected_week):
         st.write("None")
     else:
         for _, row in active_in_progress.iterrows():
-            dev_tasks = in_progress_df[in_progress_df["Developer"] == row["Developer"]]
+            dev_tasks = in_progress_df_all[in_progress_df_all["Developer"] == row["Developer"]]
             due_dates = dev_tasks["Due Date"].dropna().dt.strftime("%d-%b-%Y").unique()
             due_str = ", ".join(sorted(due_dates))
             st.markdown(f"🚧 {row['Developer']} is working on {row['In Progress Points']} SP task(s) due on: {due_str}")
