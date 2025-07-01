@@ -99,11 +99,6 @@ def render_summary_tab(df, selected_week):
     st.markdown("### Insights")
     st.markdown("**Top 3 Developers**")
     st.dataframe(top_3)
-    st.markdown("**Developers with 0 Productivity**")
-    if zero_productivity.empty:
-        st.write("None")
-    else:
-        st.dataframe(zero_productivity)
 
     st.markdown("**Active Developers with In-Progress Tasks**")
     active_in_progress = summary_df[(summary_df["Completed Points"] == 0) & (summary_df["In Progress Points"] > 0)]
