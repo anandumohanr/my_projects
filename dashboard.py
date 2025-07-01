@@ -50,8 +50,8 @@ def preprocess_data(df):
 def get_week_options(df):
     today = datetime.today()
     week_map = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
-    week_map = week_map[week_map["Week Start"] <= today]  # Filter out future weeks
-    return week_map.sort_values("Week Start", ascending=False).reset_index(drop=True)  # Descending order
+    week_map = week_map[week_map["Week Start"] <= today]
+    return week_map.sort_values("Week Start", ascending=False).reset_index(drop=True)
 
 def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
@@ -112,7 +112,7 @@ def render_trend_tab(df):
     all_weeks_df = all_weeks_df[all_weeks_df["Week Start"] <= today]
     all_weeks_df = all_weeks_df.sort_values("Week Start", ascending=False).reset_index(drop=True)
     all_weeks = all_weeks_df["Week"].tolist()
-    recent_weeks = all_weeks[:4][::-1]  # Latest 4 weeks in ascending order
+    recent_weeks = all_weeks[:4][::-1]
 
     dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
     df_dev = df[df["Developer"] == dev_option]
@@ -158,7 +158,10 @@ def main():
         df = preprocess_data(df)
 
     week_options_df = get_week_options(df)
-    week_label_map = {row["Week"]: f"{row['Week']} ({row['Week Start'].date()} to {(row['Week Start'] + timedelta(days=4)).date()})" for _, row in week_options_df.iterrows()}
+    week_label_map = {
+        row["Week"]: f"{row['Week']} ({row['Week Start'].strftime('%d-%B-%Y').upper()} to {(row['Week Start'] + timedelta(days=4)).strftime('%d-%B-%Y').upper()})"
+        for _, row in week_options_df.iterrows()
+    }
     selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
 
     tabs = st.tabs(["Summary", "Trends", "Tasks", "Export"])
