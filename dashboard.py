@@ -12,7 +12,6 @@ COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
 @st.cache_data(show_spinner=False)
 def load_excel():
     try:
-        st.info("Downloading Excel from SharePoint...")
         headers = {"User-Agent": "Mozilla/5.0"}
         r = requests.get(SHAREPOINT_URL, headers=headers)
         r.raise_for_status()
@@ -52,11 +51,11 @@ def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
     st.title("\U0001F4CA Weekly Productivity Dashboard")
 
-    df = load_excel()
-    if df.empty:
-        st.stop()
-
-    df = preprocess_data(df)
+    with st.status("Fetching and processing data from SharePoint..."):
+        df = load_excel()
+        if df.empty:
+            st.stop()
+        df = preprocess_data(df)
 
     week_options = get_week_options(df)
     selected_weeks = st.multiselect("Select week(s) to view:", week_options, default=week_options[-1:])
