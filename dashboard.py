@@ -66,12 +66,18 @@ def render_summary_tab(df, selected_week):
         data.append({"Developer": dev, "Completed Points": points, "Productivity % (out of 5 SP)": productivity_display, "_style": f"color: {color};"})
 
     summary_df = pd.DataFrame(data)
-    styled_summary = summary_df.style.apply(
-        lambda row: ["color: red" if row["Productivity % (out of 5 SP)"] != "100.0%+" and float(row["Productivity % (out of 5 SP)"].replace("%", "")) < 80 else ""]
-        * len(row),
-        axis=1
-    )
-    st.dataframe(styled_summary.drop(columns=["_style"]))
+    def highlight_low_productivity(val):
+        try:
+            if isinstance(val, str) and "%" in val:
+                num = float(val.replace("%", "").replace("+", ""))
+                if num < 80:
+                    return "color: red"
+        except:
+            pass
+        return ""
+    
+    styled_summary = summary_df.style.applymap(highlight_low_productivity, subset=["Productivity % (out of 5 SP)"])
+    st.dataframe(styled_summary)
 
     total_possible = len(all_developers) * 5
     total_completed = summary_df["Completed Points"].sum()
