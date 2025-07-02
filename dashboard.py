@@ -273,15 +273,16 @@ def render_quality_tab(bugs_df):
     st.dataframe(week_bug_counts[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
 
     st.markdown("### 👩‍💻 Developer Bug Breakdown")
-    dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS), key="quality_dev_select")
-    df_dev = bugs_df[bugs_df["Developer"] == dev_option] if not bugs_df.empty else pd.DataFrame(columns=["Week"])
+    dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS), key="dev_select_quality")
+    df_dev = bugs_df[bugs_df["Developer"] == dev_option]
 
-    dev_week_counts = (
-        df_dev.groupby("Week").size().reindex(recent_weeks_str, fill_value=0).reset_index()
-        if not df_dev.empty else pd.DataFrame({"Week": recent_weeks_str, "Bug Count": [0]*len(recent_weeks_str)})
-    )
+    dev_week_counts = df_dev.groupby("Week").size().reindex(recent_weeks_str, fill_value=0).reset_index()
     dev_week_counts.columns = ["Week", "Bug Count"]
-    dev_week_counts["Week Label"] = dev_week_counts["Week"]
+    if not df_dev.empty:
+        label_map = df_dev.drop_duplicates("Week")[["Week", "Week Label"]].set_index("Week")["Week Label"].to_dict()
+        dev_week_counts["Week Label"] = dev_week_counts["Week"].map(label_map).fillna(dev_week_counts["Week"])
+    else:
+        dev_week_counts["Week Label"] = dev_week_counts["Week"]
 
     st.altair_chart(
         alt.Chart(dev_week_counts).mark_line(point=True).encode(
