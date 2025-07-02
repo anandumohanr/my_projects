@@ -45,7 +45,7 @@ def load_jira_data():
                 "Key": issue["key"],
                 "Summary": fields.get("summary", ""),
                 "Status": fields.get("status", {}).get("name", ""),
-                "Due Date": fields.get("duedate"),
+                "Due Date": fields.get("customfield_11020"),
                 "Story Points": fields.get("customfield_10016", 0),
                 "Developer": fields.get("assignee", {}).get("displayName", "")
             })
