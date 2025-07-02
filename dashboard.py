@@ -52,12 +52,6 @@ def load_jira_data():
 
         df = pd.DataFrame(data)
         
-        st.write("Raw Data from JIRA:")
-        st.dataframe(df.head(10))
-        
-        st.write("Unique Due Dates:", df["Due Date"].dropna().unique())
-        st.write("Min/Max Due Date:", df["Due Date"].min(), df["Due Date"].max())
-        
         df["Due Date"] = pd.to_datetime(df["Due Date"])
         df["Story Points"] = pd.to_numeric(df["Story Points"]).fillna(0)
         df["Status"] = df["Status"].fillna("")
