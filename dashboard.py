@@ -23,19 +23,44 @@ DEVELOPERS = [
     "padmaja"
 ]
 
-@st.cache_data(ttl=14400, show_spinner=False)  # Auto-refresh every 4 hours (14400 seconds)
-def load_excel():
+@st.cache_data(ttl=14400, show_spinner=False)
+def load_jira_data():
+    from requests.auth import HTTPBasicAuth
+
+    url = f"{st.secrets['JIRA_URL']}/rest/api/3/search"
+    auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
+    headers = {"Accept": "application/json"}
+    jql = f"filter={st.secrets['JIRA_FILTER_ID']}&maxResults=1000"
+
+    params = {"jql": jql, "fields": "key,summary,status,duedate,customfield_10016,assignee"}
+
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(SHAREPOINT_URL, headers=headers)
-        r.raise_for_status()
+        response = requests.get(url, headers=headers, auth=auth, params=params)
+        response.raise_for_status()
+        issues = response.json()["issues"]
 
-        if b"<html" in r.content[:100].lower():
-            raise ValueError("Downloaded file is not a valid Excel document.")
+        data = []
+        for issue in issues:
+            fields = issue["fields"]
+            data.append({
+                "Key": issue["key"],
+                "Summary": fields.get("summary", ""),
+                "Status": fields.get("status", {}).get("name", ""),
+                "Due Date": fields.get("duedate", None),
+                "Story Points": fields.get("customfield_10016", 0),
+                "Developer": fields.get("assignee", {}).get("displayName", "")
+            })
 
-        return pd.read_excel(BytesIO(r.content), engine="openpyxl")
+        df = pd.DataFrame(data)
+        df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
+        df["Story Points"] = pd.to_numeric(df["Story Points"], errors="coerce").fillna(0)
+        df["Week"] = df["Due Date"].dt.strftime("%Y-%W")
+        df["Week Start"] = df["Due Date"].dt.to_period("W").apply(lambda r: r.start_time)
+        df["Is Completed"] = df["Status"].str.upper().isin(COMPLETED_STATUSES)
+        return df
+
     except Exception as e:
-        st.error(f"Failed to load data from SharePoint: {e}")
+        st.error(f"Failed to fetch JIRA data: {e}")
         return pd.DataFrame()
 
 def preprocess_data(df):
@@ -199,14 +224,14 @@ def main():
     with col1:
         if st.button("🔄 Refresh Now"):
             st.cache_data.clear()
-            st.success("✅ Data refreshed successfully")
+            st.success("✅ JIRA data refreshed successfully")
             time.sleep(1)
             st.rerun()
     with col2:
         st.caption(f"Last data refresh: {now_ist}")
 
     with st.spinner("Fetching and processing data from SharePoint..."):
-        df = load_excel()
+        df = load_jira_data()
         if df.empty:
             st.stop()
         df = preprocess_data(df)
