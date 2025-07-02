@@ -252,17 +252,19 @@ def render_quality_tab(bugs_df):
     recent_weeks = pd.date_range(end=today, periods=6, freq='W-MON')
     recent_weeks_str = [dt.strftime("%Y-%W") for dt in recent_weeks]
 
-    # Ensure required columns are available
     bugs_df = bugs_df[bugs_df["Week"].isin(recent_weeks_str)].copy()
 
-    # 📈 Bug Trends by Week
-    st.markdown("### 📈 Bug Trends by Week")
-    week_labels_map = bugs_df.drop_duplicates("Week")[["Week", "Week Label"]].set_index("Week")["Week Label"].to_dict()
-    week_bug_counts = bugs_df.groupby("Week").size().reindex(recent_weeks_str, fill_value=0).reset_index()
-    week_bug_counts.columns = ["Week", "Bug Count"]
-    week_bug_counts["Week Label"] = week_bug_counts["Week"].map(week_labels_map)
-    week_bug_counts["Week Label"].fillna(week_bug_counts["Week"], inplace=True)
+    if bugs_df.empty:
+        week_bug_counts = pd.DataFrame({"Week": recent_weeks_str, "Bug Count": [0]*len(recent_weeks_str)})
+        week_bug_counts["Week Label"] = week_bug_counts["Week"]
+    else:
+        week_labels_map = bugs_df.drop_duplicates("Week")[["Week", "Week Label"]].set_index("Week")["Week Label"].to_dict()
+        week_bug_counts = bugs_df.groupby("Week").size().reindex(recent_weeks_str, fill_value=0).reset_index()
+        week_bug_counts.columns = ["Week", "Bug Count"]
+        week_bug_counts["Week Label"] = week_bug_counts["Week"].map(week_labels_map)
+        week_bug_counts["Week Label"].fillna(week_bug_counts["Week"], inplace=True)
 
+    st.markdown("### 📈 Bug Trends by Week")
     chart = alt.Chart(week_bug_counts).mark_line(point=True).encode(
         x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bug Count")
@@ -270,30 +272,33 @@ def render_quality_tab(bugs_df):
     st.altair_chart(chart, use_container_width=True)
     st.dataframe(week_bug_counts[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
 
-    # 👩‍💻 Developer Bug Breakdown
     st.markdown("### 👩‍💻 Developer Bug Breakdown")
     dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS))
+    df_dev = bugs_df[bugs_df["Developer"] == dev_option] if not bugs_df.empty else pd.DataFrame(columns=["Week"])
 
     dev_week_counts = (
-        bugs_df[bugs_df["Developer"] == dev_option].groupby("Week").size()
-        .reindex(recent_weeks_str, fill_value=0).reset_index()
+        df_dev.groupby("Week").size().reindex(recent_weeks_str, fill_value=0).reset_index()
+        if not df_dev.empty else pd.DataFrame({"Week": recent_weeks_str, "Bug Count": [0]*len(recent_weeks_str)})
     )
     dev_week_counts.columns = ["Week", "Bug Count"]
-    dev_week_counts["Week Label"] = dev_week_counts["Week"].map(week_labels_map)
-    dev_week_counts["Week Label"].fillna(dev_week_counts["Week"], inplace=True)
+    dev_week_counts["Week Label"] = dev_week_counts["Week"]
 
-    dev_chart = alt.Chart(dev_week_counts).mark_line(point=True).encode(
-        x=alt.X("Week:N", title="Week"),
-        y=alt.Y("Bug Count", title="Bugs Reported")
-    ).properties(height=250)
-    st.altair_chart(dev_chart, use_container_width=True)
+    st.altair_chart(
+        alt.Chart(dev_week_counts).mark_line(point=True).encode(
+            x=alt.X("Week:N", title="Week"),
+            y=alt.Y("Bug Count", title="Bugs Reported")
+        ).properties(height=250),
+        use_container_width=True
+    )
     st.dataframe(dev_week_counts[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
 
-    # 💬 Insights
     st.markdown("### 💬 Insights")
-    top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
-    st.write("**Top Bug Reporters:**")
-    st.dataframe(top_buggers.head(5))
+    if not bugs_df.empty:
+        top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
+        st.write("**Top Bug Reporters:**")
+        st.dataframe(top_buggers.head(5))
+    else:
+        st.write("No bugs reported in the last 6 weeks.")
     
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
