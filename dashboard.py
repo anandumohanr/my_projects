@@ -47,7 +47,7 @@ def load_jira_data():
 
         # ✅ Debug output to verify what we received from JIRA
         st.write("Total issues fetched from JIRA:", len(issues))
-        st.dataframe(pd.DataFrame(data).head(10))  # Shows initial raw data
+        st.dataframe(pd.DataFrame(issues).head(10))  # Shows initial raw data
 
         data = []
         for issue in issues:
