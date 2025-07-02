@@ -252,20 +252,23 @@ def render_quality_tab(bugs_df):
         st.warning("No bug data available.")
         return
 
-    # Ensure 'Created' is datetime and 'Week Start' exists
-    if "Week Start" not in bugs_df.columns:
+    # Ensure 'Week' column exists
+    if "Week" not in bugs_df.columns:
         bugs_df["Created"] = pd.to_datetime(bugs_df["Created"])
-        bugs_df["Week Start"] = bugs_df["Created"].dt.to_period("W").dt.start_time
+        bugs_df["Week"] = bugs_df["Created"].dt.to_period("W").astype(str)
 
+    # Define recent 6 weeks
     today = datetime.today()
     recent_weeks = pd.date_range(end=today, periods=6, freq='W-MON').to_period('W')
     recent_weeks_str = [str(week) for week in recent_weeks]
 
     st.markdown("### 📈 Bug Trends by Week")
-    weekly_bugs = bugs_df.groupby("Week Start").size().reset_index(name="Bug Count")
-    weekly_bugs = weekly_bugs.sort_values("Week Start")
+    weekly_bugs = bugs_df.groupby("Week").size().reset_index(name="Bug Count")
+    weekly_bugs = weekly_bugs[weekly_bugs["Week"].isin(recent_weeks_str)]
+    weekly_bugs = weekly_bugs.sort_values("Week")
+
     chart = alt.Chart(weekly_bugs).mark_line(point=True).encode(
-        x=alt.X("Week Start:T", title="Week Start"),
+        x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bug Count")
     ).properties(height=250)
     st.altair_chart(chart, use_container_width=True)
@@ -274,10 +277,12 @@ def render_quality_tab(bugs_df):
     st.markdown("### 👩‍💻 Developer Bug Breakdown")
     dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Developer"].dropna().unique()))
     df_dev = bugs_df[bugs_df["Developer"] == dev_option]
-    dev_weekly = df_dev.groupby("Week Start").size().reset_index(name="Bug Count")
-    dev_weekly = dev_weekly.sort_values("Week Start")
+    dev_weekly = df_dev.groupby("Week").size().reset_index(name="Bug Count")
+    dev_weekly = dev_weekly[dev_weekly["Week"].isin(recent_weeks_str)]
+    dev_weekly = dev_weekly.sort_values("Week")
+
     dev_chart = alt.Chart(dev_weekly).mark_line(point=True).encode(
-        x=alt.X("Week Start:T", title="Week Start"),
+        x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bugs Reported")
     ).properties(height=250)
     st.altair_chart(dev_chart, use_container_width=True)
