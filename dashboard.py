@@ -320,7 +320,7 @@ def main():
         render_export_tab(team_summary)
 
     with tabs[4]:
-        render_quality_tab(bugs_df, story_df)
+        render_quality_tab(bugs_df, df)
 
 if __name__ == "__main__":
     main()
