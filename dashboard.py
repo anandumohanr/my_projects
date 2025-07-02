@@ -256,7 +256,6 @@ def render_quality_tab(bugs_df):
     recent_weeks = pd.date_range(end=today, periods=6, freq='W-MON').to_period('W')
     recent_weeks_str = [str(week) for week in recent_weeks]
 
-    # 1. Bug trend overall by week
     st.markdown("### 📈 Bug Trends by Week")
     weekly_bugs = bugs_df.groupby("Week Start").size().reset_index(name="Bug Count")
     weekly_bugs = weekly_bugs.sort_values("Week Start")
@@ -267,7 +266,6 @@ def render_quality_tab(bugs_df):
     st.altair_chart(chart, use_container_width=True)
     st.dataframe(weekly_bugs)
 
-    # 2. Developer-level bug breakdown for recent weeks
     st.markdown("### \U0001F9D1‍\U0001F4BB Developer Bug Breakdown")
     dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Developer"].unique()))
     df_dev = bugs_df[bugs_df["Developer"] == dev_option]
@@ -280,10 +278,9 @@ def render_quality_tab(bugs_df):
     st.altair_chart(dev_chart, use_container_width=True)
     st.dataframe(dev_weekly)
 
-    # 3. Insights (top bug reporters etc.)
     st.markdown("### \U0001F4AC Insights")
     top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
-    st.write("**Top Bug Creators:**")
+    st.write("**Top Bug Reporters:**")
     st.dataframe(top_buggers.head(5))
     
 def main():
