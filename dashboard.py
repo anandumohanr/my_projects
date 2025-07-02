@@ -227,7 +227,6 @@ def main():
             st.stop()
 
     week_options_df = get_week_options(df)
-    st.write("Available Weeks from JIRA:", week_options_df)
     week_label_map = {
         row["Week"]: f"{row['Week']} ({row['Week Start'].strftime('%d-%B-%Y').upper()} to {(row['Week Start'] + timedelta(days=4)).strftime('%d-%B-%Y').upper()})"
         for _, row in week_options_df.iterrows()
