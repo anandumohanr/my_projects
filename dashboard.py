@@ -254,44 +254,51 @@ def render_quality_tab(bugs_df):
 
     # Ensure 'Week' column exists in correct format
     bugs_df["Created"] = pd.to_datetime(bugs_df["Created"])
-    bugs_df["Week"] = bugs_df["Created"].dt.strftime("%Y-%W")  # Example: 2025-25
+    bugs_df["Week"] = bugs_df["Created"].dt.strftime("%Y-%W")
+    bugs_df["Week Start"] = bugs_df["Created"].dt.to_period("W").dt.start_time
+    bugs_df["Week End"] = bugs_df["Week Start"] + timedelta(days=4)
 
-    # Recent 6 weeks in the same format
+    # Build full label for table use
+    bugs_df["Week Label"] = bugs_df["Week"] + " (" + bugs_df["Week Start"].dt.strftime("%d-%B-%Y").str.upper() + " to " + bugs_df["Week End"].dt.strftime("%d-%B-%Y").str.upper() + ")"
+
+    # Recent 6 weeks filter
     today = datetime.today()
     recent_weeks = pd.date_range(end=today, periods=6, freq='W-MON')
     recent_weeks_str = [dt.strftime("%Y-%W") for dt in recent_weeks]
 
-    # 1. Bug trend overall by week
     st.markdown("### 📈 Bug Trends by Week")
-    weekly_bugs = bugs_df.groupby("Week").size().reset_index(name="Bug Count")
-    weekly_bugs = weekly_bugs[weekly_bugs["Week"].isin(recent_weeks_str)].sort_values("Week")
+    weekly_bugs = bugs_df[bugs_df["Week"].isin(recent_weeks_str)]
+    weekly_summary = weekly_bugs.groupby(["Week", "Week Label"]).size().reset_index(name="Bug Count").sort_values("Week")
 
-    chart = alt.Chart(weekly_bugs).mark_line(point=True).encode(
+    # Line chart using just 'Week'
+    chart = alt.Chart(weekly_summary).mark_line(point=True).encode(
         x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bug Count")
     ).properties(height=250)
     st.altair_chart(chart, use_container_width=True)
-    st.dataframe(weekly_bugs)
 
-    # 2. Developer-level bug breakdown
+    # Table with detailed label
+    st.dataframe(weekly_summary[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
+
     st.markdown("### 👩‍💻 Developer Bug Breakdown")
     dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Developer"].dropna().unique()))
-    df_dev = bugs_df[bugs_df["Developer"] == dev_option]
-    dev_weekly = df_dev.groupby("Week").size().reset_index(name="Bug Count")
-    dev_weekly = dev_weekly[dev_weekly["Week"].isin(recent_weeks_str)].sort_values("Week")
+    df_dev = bugs_df[(bugs_df["Developer"] == dev_option) & (bugs_df["Week"].isin(recent_weeks_str))]
 
-    dev_chart = alt.Chart(dev_weekly).mark_line(point=True).encode(
+    dev_summary = df_dev.groupby(["Week", "Week Label"]).size().reset_index(name="Bug Count").sort_values("Week")
+
+    dev_chart = alt.Chart(dev_summary).mark_line(point=True).encode(
         x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bugs Reported")
     ).properties(height=250)
     st.altair_chart(dev_chart, use_container_width=True)
-    st.dataframe(dev_weekly)
 
-    # 3. Insights
+    st.dataframe(dev_summary[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
+
     st.markdown("### 💬 Insights")
     top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
     st.write("**Top Bug Reporters:**")
     st.dataframe(top_buggers.head(5))
+
     
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
