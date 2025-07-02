@@ -205,7 +205,7 @@ def render_trend_tab(df):
     all_weeks = all_weeks_df["Week"].tolist()
     recent_weeks = all_weeks[:4][::-1]
 
-    dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
+    dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS), key="trend_tab_dev_select")
     df_dev = df[df["Developer"] == dev_option]
     df_dev_completed = df_dev[df_dev["Is Completed"]]
     weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().astype(int).reindex(recent_weeks, fill_value=0).reset_index()
@@ -273,7 +273,7 @@ def render_quality_tab(bugs_df):
     st.dataframe(week_bug_counts[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
 
     st.markdown("### 👩‍💻 Developer Bug Breakdown")
-    dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS))
+    dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS), key="quality_dev_select")
     df_dev = bugs_df[bugs_df["Developer"] == dev_option] if not bugs_df.empty else pd.DataFrame(columns=["Week"])
 
     dev_week_counts = (
