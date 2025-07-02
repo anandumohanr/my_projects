@@ -215,29 +215,14 @@ def main():
     with col1:
         if st.button("🔄 Refresh Now"):
             st.cache_data.clear()
-            st.success("✅ JIRA data refreshed successfully")
             time.sleep(1)
             st.rerun()
+            st.success("✅ JIRA data refreshed successfully")
     with col2:
         st.caption(f"Last data refresh: {now_ist}")
 
     with st.spinner("Fetching and processing data from JIRA..."):
         df = load_jira_data()
-
-        st.write("Sample raw data:")
-        st.dataframe(df.head(10))
-        
-        st.write("Unique Status values:")
-        st.write(df["Status"].unique())
-        
-        st.write("Unique Developers:")
-        st.write(df["Developer"].unique())
-        
-        st.write("Week distribution:")
-        st.write(df["Week"].value_counts())
-        
-        st.write("Story Points distribution:")
-        st.write(df["Story Points"].describe())
                 
         if df.empty:
             st.stop()
