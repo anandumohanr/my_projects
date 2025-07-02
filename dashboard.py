@@ -248,52 +248,57 @@ def render_export_tab(team_summary):
 def render_quality_tab(bugs_df):
     st.subheader("Bug and Quality Metrics")
 
-    if bugs_df.empty:
-        st.warning("No bug data available.")
-        return
-
-    # Ensure 'Week' column exists in correct format
-    bugs_df["Created"] = pd.to_datetime(bugs_df["Created"])
-    bugs_df["Week"] = bugs_df["Created"].dt.strftime("%Y-%W")
-    bugs_df["Week Start"] = bugs_df["Created"].dt.to_period("W").dt.start_time
-    bugs_df["Week End"] = bugs_df["Week Start"] + timedelta(days=4)
-
-    # Build full label for table use
-    bugs_df["Week Label"] = bugs_df["Week"] + " (" + bugs_df["Week Start"].dt.strftime("%d-%B-%Y").str.upper() + " to " + bugs_df["Week End"].dt.strftime("%d-%B-%Y").str.upper() + ")"
-
-    # Recent 6 weeks filter
     today = datetime.today()
     recent_weeks = pd.date_range(end=today, periods=6, freq='W-MON')
     recent_weeks_str = [dt.strftime("%Y-%W") for dt in recent_weeks]
 
-    st.markdown("### 📈 Bug Trends by Week")
-    weekly_bugs = bugs_df[bugs_df["Week"].isin(recent_weeks_str)]
-    weekly_summary = weekly_bugs.groupby(["Week", "Week Label"]).size().reset_index(name="Bug Count").sort_values("Week")
+    bugs_df = bugs_df[bugs_df["Week"].isin(recent_weeks_str)]
 
-    # Line chart using just 'Week'
-    chart = alt.Chart(weekly_summary).mark_line(point=True).encode(
+    # 📈 Bug Trends by Week
+    st.markdown("### 📈 Bug Trends by Week")
+    trend_summary = bugs_df.groupby(["Week", "Week Label"]).size().reindex(
+        pd.MultiIndex.from_product([recent_weeks_str, [bugs_df["Week Label"].unique()]], names=["Week", "Week Label"]),
+        fill_value=0).reset_index().drop_duplicates(subset=["Week"]).sort_values("Week")
+    trend_summary.columns = ["Week", "Week Label", "Bug Count"]
+
+    chart = alt.Chart(trend_summary).mark_line(point=True).encode(
         x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bug Count")
     ).properties(height=250)
     st.altair_chart(chart, use_container_width=True)
+    st.dataframe(trend_summary[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
 
-    # Table with detailed label
-    st.dataframe(weekly_summary[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
-
+    # 👩‍💻 Developer Bug Breakdown
     st.markdown("### 👩‍💻 Developer Bug Breakdown")
-    dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Developer"].dropna().unique()))
-    df_dev = bugs_df[(bugs_df["Developer"] == dev_option) & (bugs_df["Week"].isin(recent_weeks_str))]
+    dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS))
+    bugs_df_all = bugs_df.copy()
 
-    dev_summary = df_dev.groupby(["Week", "Week Label"]).size().reset_index(name="Bug Count").sort_values("Week")
+    breakdown = (
+        bugs_df_all[bugs_df_all["Developer"] == dev_option]
+        .groupby(["Week", "Week Label"]).size()
+        .reindex(
+            pd.MultiIndex.from_product([
+                recent_weeks_str, [dev_option]
+            ], names=["Week", "Developer"]),
+            fill_value=0
+        )
+        .reset_index()
+        .merge(
+            bugs_df_all.drop_duplicates(subset="Week")[["Week", "Week Label"]],
+            on="Week", how="left"
+        ).drop_duplicates(subset="Week")
+        .sort_values("Week")
+    )
+    breakdown.columns = ["Week", "Developer", "Bug Count", "Week Label"]
 
-    dev_chart = alt.Chart(dev_summary).mark_line(point=True).encode(
+    dev_chart = alt.Chart(breakdown).mark_line(point=True).encode(
         x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bugs Reported")
     ).properties(height=250)
     st.altair_chart(dev_chart, use_container_width=True)
+    st.dataframe(breakdown[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
 
-    st.dataframe(dev_summary[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
-
+    # 💬 Insights
     st.markdown("### 💬 Insights")
     top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
     st.write("**Top Bug Reporters:**")
