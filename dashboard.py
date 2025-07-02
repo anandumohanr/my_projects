@@ -62,18 +62,6 @@ def load_jira_data():
     except Exception as e:
         st.error(f"Failed to fetch JIRA data: {e}")
         return pd.DataFrame()
-    
-def preprocess_data(df):
-    df = df.copy()
-    df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
-    df["Story Points"] = pd.to_numeric(df["Story Points"], errors="coerce").fillna(0)
-    df["Status"] = df["Status"].fillna("")
-    df["Week"] = df["Due Date"].dt.strftime("%Y-%W")
-    df["Week Start"] = pd.NaT
-    valid_dates = df["Due Date"].notna()
-    df.loc[valid_dates, "Week Start"] = df.loc[valid_dates, "Due Date"].dt.to_period("W").apply(lambda r: r.start_time)
-    df["Is Completed"] = df["Status"].str.upper().isin(COMPLETED_STATUSES)
-    return df
 
 def get_week_options(df):
     today = datetime.today()
@@ -232,13 +220,13 @@ def main():
     with col2:
         st.caption(f"Last data refresh: {now_ist}")
 
-    with st.spinner("Fetching and processing data from SharePoint..."):
+    with st.spinner("Fetching and processing data from JIRA..."):
         df = load_jira_data()
         if df.empty:
             st.stop()
-        df = preprocess_data(df)
 
     week_options_df = get_week_options(df)
+    st.write("Available Weeks from JIRA:", week_options_df)
     week_label_map = {
         row["Week"]: f"{row['Week']} ({row['Week Start'].strftime('%d-%B-%Y').upper()} to {(row['Week Start'] + timedelta(days=4)).strftime('%d-%B-%Y').upper()})"
         for _, row in week_options_df.iterrows()
