@@ -252,51 +252,42 @@ def render_quality_tab(bugs_df):
     recent_weeks = pd.date_range(end=today, periods=6, freq='W-MON')
     recent_weeks_str = [dt.strftime("%Y-%W") for dt in recent_weeks]
 
-    bugs_df = bugs_df[bugs_df["Week"].isin(recent_weeks_str)]
+    # Ensure required columns are available
+    bugs_df = bugs_df[bugs_df["Week"].isin(recent_weeks_str)].copy()
 
     # 📈 Bug Trends by Week
     st.markdown("### 📈 Bug Trends by Week")
-    trend_summary = bugs_df.groupby(["Week", "Week Label"]).size().reindex(
-        pd.MultiIndex.from_product([recent_weeks_str, [bugs_df["Week Label"].unique()]], names=["Week", "Week Label"]),
-        fill_value=0).reset_index().drop_duplicates(subset=["Week"]).sort_values("Week")
-    trend_summary.columns = ["Week", "Week Label", "Bug Count"]
+    week_labels_map = bugs_df.drop_duplicates("Week")[["Week", "Week Label"]].set_index("Week")["Week Label"].to_dict()
+    week_bug_counts = bugs_df.groupby("Week").size().reindex(recent_weeks_str, fill_value=0).reset_index()
+    week_bug_counts.columns = ["Week", "Bug Count"]
+    week_bug_counts["Week Label"] = week_bug_counts["Week"].map(week_labels_map)
+    week_bug_counts["Week Label"].fillna(week_bug_counts["Week"], inplace=True)
 
-    chart = alt.Chart(trend_summary).mark_line(point=True).encode(
+    chart = alt.Chart(week_bug_counts).mark_line(point=True).encode(
         x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bug Count")
     ).properties(height=250)
     st.altair_chart(chart, use_container_width=True)
-    st.dataframe(trend_summary[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
+    st.dataframe(week_bug_counts[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
 
     # 👩‍💻 Developer Bug Breakdown
     st.markdown("### 👩‍💻 Developer Bug Breakdown")
     dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS))
-    bugs_df_all = bugs_df.copy()
 
-    breakdown = (
-        bugs_df_all[bugs_df_all["Developer"] == dev_option]
-        .groupby(["Week", "Week Label"]).size()
-        .reindex(
-            pd.MultiIndex.from_product([
-                recent_weeks_str, [dev_option]
-            ], names=["Week", "Developer"]),
-            fill_value=0
-        )
-        .reset_index()
-        .merge(
-            bugs_df_all.drop_duplicates(subset="Week")[["Week", "Week Label"]],
-            on="Week", how="left"
-        ).drop_duplicates(subset="Week")
-        .sort_values("Week")
+    dev_week_counts = (
+        bugs_df[bugs_df["Developer"] == dev_option].groupby("Week").size()
+        .reindex(recent_weeks_str, fill_value=0).reset_index()
     )
-    breakdown.columns = ["Week", "Developer", "Bug Count", "Week Label"]
+    dev_week_counts.columns = ["Week", "Bug Count"]
+    dev_week_counts["Week Label"] = dev_week_counts["Week"].map(week_labels_map)
+    dev_week_counts["Week Label"].fillna(dev_week_counts["Week"], inplace=True)
 
-    dev_chart = alt.Chart(breakdown).mark_line(point=True).encode(
+    dev_chart = alt.Chart(dev_week_counts).mark_line(point=True).encode(
         x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bugs Reported")
     ).properties(height=250)
     st.altair_chart(dev_chart, use_container_width=True)
-    st.dataframe(breakdown[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
+    st.dataframe(dev_week_counts[["Week Label", "Bug Count"]].rename(columns={"Week Label": "Week"}))
 
     # 💬 Insights
     st.markdown("### 💬 Insights")
