@@ -70,7 +70,7 @@ def load_bug_data():
     url = f"https://{jira_domain}/rest/api/3/search"
     auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
     headers = {"Accept": "application/json"}
-    jql = f"filter={BUGS_FILTER_ID}"
+    jql = f"filter=18484"
     params = {"jql": jql, "fields": "key,summary,created,assignee", "maxResults": 1000}
 
     try:
@@ -305,7 +305,7 @@ def main():
     }
     selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
 
-    tabs = st.tabs(["Summary", "Trends", "Tasks", "Export"])
+    tabs = st.tabs(["Summary", "Trends", "Tasks", "Export", "Quality"])
 
     with tabs[0]:
         summary_df, team_summary = render_summary_tab(df, selected_week)
