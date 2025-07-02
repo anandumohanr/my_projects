@@ -31,7 +31,7 @@ def load_jira_data():
     auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
     headers = {"Accept": "application/json"}
     jql = f"filter={st.secrets['JIRA_FILTER_ID']}"
-    params = {"jql": jql, "fields": "key,summary,status,duedate,customfield_10016,assignee", "maxResults": 1000}
+    params = {"jql": jql, "fields": "key,summary,status,due date,customfield_10016,assignee", "maxResults": 1000}
 
     try:
         response = requests.get(url, headers=headers, auth=auth, params=params)
