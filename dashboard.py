@@ -64,6 +64,39 @@ def load_jira_data():
         st.error(f"Failed to fetch JIRA data: {e}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=14400, show_spinner=False)
+def load_bug_data():
+    jira_domain = st.secrets["JIRA_DOMAIN"]
+    url = f"https://{jira_domain}/rest/api/3/search"
+    auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
+    headers = {"Accept": "application/json"}
+    jql = f"filter={BUGS_FILTER_ID}"
+    params = {"jql": jql, "fields": "key,summary,created,assignee", "maxResults": 1000}
+
+    try:
+        response = requests.get(url, headers=headers, auth=auth, params=params)
+        response.raise_for_status()
+        issues = response.json()["issues"]
+
+        data = []
+        for issue in issues:
+            fields = issue["fields"]
+            data.append({
+                "Key": issue["key"],
+                "Summary": fields.get("summary", ""),
+                "Created": fields.get("created"),
+                "Assignee": fields.get("assignee", {}).get("displayName", "Unassigned")
+            })
+
+        df = pd.DataFrame(data)
+        df["Created"] = pd.to_datetime(df["Created"])
+        df["Week"] = df["Created"].dt.strftime("%Y-%W")
+        return df
+
+    except Exception as e:
+        st.error(f"Failed to fetch Bug data: {e}")
+        return pd.DataFrame()
+
 def get_week_options(df):
     today = datetime.today()
     week_map = df.dropna(subset=["Week", "Week Start"]).drop_duplicates(subset="Week")[["Week", "Week Start"]]
@@ -212,6 +245,36 @@ def render_export_tab(team_summary):
     st.subheader("Export Summary")
     st.download_button("Download Summary CSV", data=team_summary.to_csv(index=False), file_name="team_productivity.csv")
 
+def render_quality_tab(bugs_df, story_df):
+    st.subheader("Bug and Quality Metrics")
+
+    if bugs_df.empty:
+        st.warning("No bug data available.")
+        return
+
+    # Bug Trend
+    st.markdown("### 📈 Bug Trends by Week")
+    weekly_bugs = bugs_df.groupby("Week").size().reset_index(name="Bug Count")
+    chart = alt.Chart(weekly_bugs).mark_line(point=True).encode(
+        x=alt.X("Week", title="Week"),
+        y=alt.Y("Bug Count", title="Bug Count")
+    ).properties(height=250)
+    st.altair_chart(chart, use_container_width=True)
+
+    # Bugs per Developer
+    st.markdown("### 🧑‍💻 Bugs per Developer")
+    dev_bugs = bugs_df.groupby("Assignee").size().reset_index(name="Bug Count")
+    st.dataframe(dev_bugs)
+
+    # Bug Rate
+    st.markdown("### 🔢 Developer Quality Score (SP / Bugs)")
+    completed_df = story_df[story_df["Is Completed"]]
+    dev_sp = completed_df.groupby("Developer")["Story Points"].sum().reset_index()
+    quality_df = pd.merge(dev_sp, dev_bugs, left_on="Developer", right_on="Assignee", how="left").fillna(0)
+    quality_df["Bug Count"] = quality_df["Bug Count"].astype(int)
+    quality_df["Quality Score"] = quality_df.apply(lambda row: round(row["Story Points"] / (1 + row["Bug Count"]), 2), axis=1)
+    st.dataframe(quality_df[["Developer", "Story Points", "Bug Count", "Quality Score"]])
+
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
     st.title("📊 Weekly Productivity Dashboard")
@@ -230,6 +293,7 @@ def main():
 
     with st.spinner("Fetching and processing data from JIRA..."):
         df = load_jira_data()
+        bugs_df = load_bug_data()
                 
         if df.empty:
             st.stop()
@@ -254,6 +318,9 @@ def main():
 
     with tabs[3]:
         render_export_tab(team_summary)
+
+    with tabs[4]:
+        render_quality_tab(bugs_df, story_df)
 
 if __name__ == "__main__":
     main()
