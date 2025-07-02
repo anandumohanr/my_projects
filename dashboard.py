@@ -257,11 +257,11 @@ def render_quality_tab(bugs_df):
     recent_weeks_str = [str(week) for week in recent_weeks]
 
     # 1. Bug trend overall by week
-    st.markdown("### \U0001F4C8 Bug Trends by Week")
-    weekly_bugs = bugs_df.groupby("Week").size().reset_index(name="Bug Count")
-    weekly_bugs = weekly_bugs[weekly_bugs["Week"].isin(recent_weeks_str)]
+    st.markdown("### 📈 Bug Trends by Week")
+    weekly_bugs = bugs_df.groupby("Week Start").size().reset_index(name="Bug Count")
+    weekly_bugs = weekly_bugs.sort_values("Week Start")
     chart = alt.Chart(weekly_bugs).mark_line(point=True).encode(
-        x=alt.X("Week", title="Week"),
+        x=alt.X("Week Start:T", title="Week Start"),
         y=alt.Y("Bug Count", title="Bug Count")
     ).properties(height=250)
     st.altair_chart(chart, use_container_width=True)
@@ -271,21 +271,19 @@ def render_quality_tab(bugs_df):
     st.markdown("### \U0001F9D1‍\U0001F4BB Developer Bug Breakdown")
     dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Developer"].unique()))
     df_dev = bugs_df[bugs_df["Developer"] == dev_option]
-    dev_weekly = df_dev.groupby("Week").size().reset_index(name="Bug Count")
-    dev_weekly = dev_weekly[dev_weekly["Week"].isin(recent_weeks_str)]
-    st.altair_chart(
-        alt.Chart(dev_weekly).mark_bar().encode(
-            x=alt.X("Week", title="Week"),
-            y=alt.Y("Bug Count", title="Bugs Reported")
-        ).properties(height=250),
-        use_container_width=True
-    )
+    dev_weekly = df_dev.groupby("Week Start").size().reset_index(name="Bug Count")
+    dev_weekly = dev_weekly.sort_values("Week Start")
+    dev_chart = alt.Chart(dev_weekly).mark_line(point=True).encode(
+        x=alt.X("Week Start:T", title="Week Start"),
+        y=alt.Y("Bug Count", title="Bugs Reported")
+    ).properties(height=250)
+    st.altair_chart(dev_chart, use_container_width=True)
     st.dataframe(dev_weekly)
 
     # 3. Insights (top bug reporters etc.)
     st.markdown("### \U0001F4AC Insights")
     top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
-    st.write("**Top Bug Reporters:**")
+    st.write("**Top Bug Creators:**")
     st.dataframe(top_buggers.head(5))
     
 def main():
