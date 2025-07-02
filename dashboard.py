@@ -252,6 +252,11 @@ def render_quality_tab(bugs_df):
         st.warning("No bug data available.")
         return
 
+    # Ensure 'Created' is datetime and 'Week Start' exists
+    if "Week Start" not in bugs_df.columns:
+        bugs_df["Created"] = pd.to_datetime(bugs_df["Created"])
+        bugs_df["Week Start"] = bugs_df["Created"].dt.to_period("W").dt.start_time
+
     today = datetime.today()
     recent_weeks = pd.date_range(end=today, periods=6, freq='W-MON').to_period('W')
     recent_weeks_str = [str(week) for week in recent_weeks]
@@ -266,8 +271,8 @@ def render_quality_tab(bugs_df):
     st.altair_chart(chart, use_container_width=True)
     st.dataframe(weekly_bugs)
 
-    st.markdown("### \U0001F9D1‍\U0001F4BB Developer Bug Breakdown")
-    dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Developer"].unique()))
+    st.markdown("### 👩‍💻 Developer Bug Breakdown")
+    dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Developer"].dropna().unique()))
     df_dev = bugs_df[bugs_df["Developer"] == dev_option]
     dev_weekly = df_dev.groupby("Week Start").size().reset_index(name="Bug Count")
     dev_weekly = dev_weekly.sort_values("Week Start")
@@ -278,7 +283,7 @@ def render_quality_tab(bugs_df):
     st.altair_chart(dev_chart, use_container_width=True)
     st.dataframe(dev_weekly)
 
-    st.markdown("### \U0001F4AC Insights")
+    st.markdown("### 💬 Insights")
     top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
     st.write("**Top Bug Reporters:**")
     st.dataframe(top_buggers.head(5))
