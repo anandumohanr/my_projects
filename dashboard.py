@@ -25,29 +25,17 @@ DEVELOPERS = [
 
 @st.cache_data(ttl=14400, show_spinner=False)
 def load_jira_data():
-    from requests.auth import HTTPBasicAuth
-
     jira_domain = st.secrets["JIRA_DOMAIN"]
     url = f"https://{jira_domain}/rest/api/3/search"
     auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
     headers = {"Accept": "application/json"}
-
-    # NOTE: filter ID goes in JQL param only, not in the URL
     jql = f"filter={st.secrets['JIRA_FILTER_ID']}"
-    params = {
-        "jql": jql,
-        "maxResults": 1000,
-        "fields": "key,summary,status,duedate,customfield_10016,assignee"
-    }
+    params = {"jql": jql, "fields": "key,summary,status,duedate,customfield_10016,assignee", "maxResults": 1000}
 
     try:
         response = requests.get(url, headers=headers, auth=auth, params=params)
         response.raise_for_status()
         issues = response.json()["issues"]
-
-        # ✅ Debug output to verify what we received from JIRA
-        st.write("Total issues fetched from JIRA:", len(issues))
-        st.dataframe(pd.DataFrame(issues).head(10))  # Shows initial raw data
 
         data = []
         for issue in issues:
@@ -56,21 +44,17 @@ def load_jira_data():
                 "Key": issue["key"],
                 "Summary": fields.get("summary", ""),
                 "Status": fields.get("status", {}).get("name", ""),
-                "Due Date": fields.get("duedate", None),
+                "Due Date": fields.get("duedate"),
                 "Story Points": fields.get("customfield_10016", 0),
                 "Developer": fields.get("assignee", {}).get("displayName", "")
             })
 
         df = pd.DataFrame(data)
-        df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
-        df["Story Points"] = pd.to_numeric(df["Story Points"], errors="coerce").fillna(0)
+        df["Due Date"] = pd.to_datetime(df["Due Date"])
+        df["Story Points"] = pd.to_numeric(df["Story Points"]).fillna(0)
+        df["Status"] = df["Status"].fillna("")
         df["Week"] = df["Due Date"].dt.strftime("%Y-%W")
-
-        # Handle Week Start only for non-null due dates
-        df["Week Start"] = pd.NaT
-        valid_due_dates = df["Due Date"].notna()
-        df.loc[valid_due_dates, "Week Start"] = df.loc[valid_due_dates, "Due Date"].dt.to_period("W").apply(lambda r: r.start_time)
-
+        df["Week Start"] = df["Due Date"].dt.to_period("W").dt.start_time
         df["Is Completed"] = df["Status"].str.upper().isin(COMPLETED_STATUSES)
         return df
 
