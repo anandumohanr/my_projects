@@ -90,7 +90,7 @@ def load_bug_data():
 
         df = pd.DataFrame(data)
         df["Created"] = pd.to_datetime(df["Created"])
-        df["Week"] = df["Created"].dt.strftime("%Y-%W")
+        df["Week"] = df["Created"].dt.to_period("W").astype(str)
         return df
 
     except Exception as e:
