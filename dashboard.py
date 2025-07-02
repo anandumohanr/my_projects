@@ -204,8 +204,8 @@ def render_trend_tab(df):
     all_weeks_df = all_weeks_df.sort_values("Week Start", ascending=False).reset_index(drop=True)
     all_weeks = all_weeks_df["Week"].tolist()
     recent_weeks = all_weeks[:4][::-1]
-
-    dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)))
+    
+    dev_option = st.selectbox("Select Developer:", options=sorted(set(DEVELOPERS)), key="trend_dev_selector")
     df_dev = df[df["Developer"] == dev_option]
     df_dev_completed = df_dev[df_dev["Is Completed"]]
     weekly_dev = df_dev_completed.groupby("Week")["Story Points"].sum().astype(int).reindex(recent_weeks, fill_value=0).reset_index()
