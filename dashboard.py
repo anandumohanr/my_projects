@@ -71,7 +71,7 @@ def load_bug_data():
     auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
     headers = {"Accept": "application/json"}
     jql = f"filter=18484"
-    params = {"jql": jql, "fields": "key,summary,created,assignee", "maxResults": 1000}
+    params = {"jql": jql, "fields": "key,summary,created,customfield_11012", "maxResults": 1000}
 
     try:
         response = requests.get(url, headers=headers, auth=auth, params=params)
@@ -85,7 +85,7 @@ def load_bug_data():
                 "Key": issue["key"],
                 "Summary": fields.get("summary", ""),
                 "Created": fields.get("created"),
-                "Assignee": fields.get("assignee", {}).get("displayName", "Unassigned")
+                "Developer": fields.get("customfield_11012", {}).get("displayName", "")
             })
 
         df = pd.DataFrame(data)
@@ -269,8 +269,8 @@ def render_quality_tab(bugs_df):
 
     # 2. Developer-level bug breakdown for recent weeks
     st.markdown("### \U0001F9D1‍\U0001F4BB Developer Bug Breakdown")
-    dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Assignee"].unique()))
-    df_dev = bugs_df[bugs_df["Assignee"] == dev_option]
+    dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Developer"].unique()))
+    df_dev = bugs_df[bugs_df["Developer"] == dev_option]
     dev_weekly = df_dev.groupby("Week").size().reset_index(name="Bug Count")
     dev_weekly = dev_weekly[dev_weekly["Week"].isin(recent_weeks_str)]
     st.altair_chart(
@@ -284,7 +284,7 @@ def render_quality_tab(bugs_df):
 
     # 3. Insights (top bug reporters etc.)
     st.markdown("### \U0001F4AC Insights")
-    top_buggers = bugs_df.groupby("Assignee").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
+    top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
     st.write("**Top Bug Reporters:**")
     st.dataframe(top_buggers.head(5))
     
