@@ -28,23 +28,30 @@ def load_jira_data():
     from requests.auth import HTTPBasicAuth
 
     jira_domain = st.secrets["JIRA_DOMAIN"]
-    url = f"https://{jira_domain}/rest/api/3/search"
-    auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
-    headers = {"Accept": "application/json"}
-    jql = f"filter={st.secrets['JIRA_FILTER_ID']}&maxResults=1000"
+    jira_email = st.secrets["JIRA_EMAIL"]
+    jira_token = st.secrets["JIRA_API_TOKEN"]
+    jira_filter_id = st.secrets["JIRA_FILTER_ID"]
 
-    params = {"jql": jql, "fields": "key,summary,status,duedate,customfield_10016,assignee"}
+    url = f"https://{jira_domain}/rest/api/3/search"
+    auth = HTTPBasicAuth(jira_email, jira_token)
+    headers = {"Accept": "application/json"}
+
+    params = {
+        "jql": f"filter={jira_filter_id}",
+        "maxResults": 1000,
+        "fields": "key,summary,status,duedate,customfield_10016,assignee"
+    }
 
     try:
         response = requests.get(url, headers=headers, auth=auth, params=params)
         response.raise_for_status()
-        issues = response.json()["issues"]
+        issues = response.json().get("issues", [])
 
         data = []
         for issue in issues:
-            fields = issue["fields"]
+            fields = issue.get("fields", {})
             data.append({
-                "Key": issue["key"],
+                "Key": issue.get("key", ""),
                 "Summary": fields.get("summary", ""),
                 "Status": fields.get("status", {}).get("name", ""),
                 "Due Date": fields.get("duedate", None),
@@ -63,7 +70,7 @@ def load_jira_data():
     except Exception as e:
         st.error(f"Failed to fetch JIRA data: {e}")
         return pd.DataFrame()
-
+    
 def preprocess_data(df):
     df = df.copy()
     df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
