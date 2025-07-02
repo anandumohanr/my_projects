@@ -241,10 +241,6 @@ def render_tasks_tab(df, selected_week):
     filtered_df = df[df["Week"] == selected_week]
     st.dataframe(filtered_df[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points", "Week"]])
 
-def render_export_tab(team_summary):
-    st.subheader("Export Summary")
-    st.download_button("Download Summary CSV", data=team_summary.to_csv(index=False), file_name="team_productivity.csv")
-
 def render_quality_tab(bugs_df):
     st.subheader("Bug and Quality Metrics")
 
@@ -329,7 +325,7 @@ def main():
     }
     selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
 
-    tabs = st.tabs(["Summary", "Trends", "Tasks", "Export", "Quality"])
+    tabs = st.tabs(["Summary", "Trends", "Tasks", "Quality"])
 
     with tabs[0]:
         summary_df, team_summary = render_summary_tab(df, selected_week)
@@ -341,9 +337,6 @@ def main():
         render_tasks_tab(df, selected_week)
 
     with tabs[3]:
-        render_export_tab(team_summary)
-
-    with tabs[4]:
         render_quality_tab(bugs_df)
 
 if __name__ == "__main__":
