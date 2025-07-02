@@ -183,14 +183,21 @@ def render_trend_tab(df):
         weekly_dev["Color"] = weekly_dev["Delta"].apply(lambda x: "green" if x > 0 else ("red" if x < 0 else "gray"))
         weekly_dev["Change"] = weekly_dev["Delta"].apply(lambda x: "⬆️" if x > 0 else ("⬇️" if x < 0 else "➖"))
 
-        line = alt.Chart(weekly_dev).mark_line(point=True).encode(
-            x=alt.X("Week:N", title="Week"),
-            y=alt.Y("Story Points:Q", title="Story Points"),
-            tooltip=["Week", "Story Points", "Change"],
-            color=alt.Color("Color:N", scale=None)
+        line = alt.Chart(weekly_dev).mark_line(color="steelblue").encode(
+        x=alt.X("Week:N", title="Week"),
+        y=alt.Y("Story Points:Q", title="Story Points"),
+        tooltip=["Week", "Story Points"]
         )
+        
+        points = alt.Chart(weekly_dev).mark_point(filled=True).encode(
+            x="Week:N",
+            y="Story Points:Q",
+            color=alt.Color("Color:N", scale=None),
+            tooltip=["Week", "Story Points", "Change"]
+        )
+        
+        st.altair_chart((line + points).properties(title=f"{dev_option} Productivity (Last 4 Weeks)", height=250), use_container_width=True)
 
-        st.altair_chart(line.properties(title=f"{dev_option} Productivity (Last 4 Weeks)", height=250), use_container_width=True)
         st.markdown("#### Tabular View")
         st.dataframe(weekly_dev[["Week", "Story Points", "Change"]])
     else:
