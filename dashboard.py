@@ -279,7 +279,7 @@ def render_quality_tab(bugs_df):
 
     # 👨‍💻 2. Developer Bug Breakdown
     st.markdown("### 👩‍💻 Developer Bug Breakdown")
-    dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS))
+    dev_option = st.selectbox("Select Developer:", options=sorted(DEVELOPERS), key="bug_dev_selector")
     
     # Ensure all week-dev pairs are present
     dev_data = bugs_recent[bugs_recent["Developer"] == dev_option]
