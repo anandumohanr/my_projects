@@ -71,7 +71,7 @@ def load_bug_data():
     auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
     headers = {"Accept": "application/json"}
     jql = f"filter=18484"
-    params = {"jql": jql, "fields": "key,summary,created,assignee", "maxResults": 1000}
+    params = {"jql": jql, "fields": "key,summary,created,customfield_11012", "maxResults": 1000}
 
     try:
         response = requests.get(url, headers=headers, auth=auth, params=params)
@@ -85,12 +85,12 @@ def load_bug_data():
                 "Key": issue["key"],
                 "Summary": fields.get("summary", ""),
                 "Created": fields.get("created"),
-                "Assignee": fields.get("assignee", {}).get("displayName", "Unassigned")
+                "Developer": fields.get("customfield_11012", {}).get("displayName", "")
             })
 
         df = pd.DataFrame(data)
         df["Created"] = pd.to_datetime(df["Created"])
-        df["Week"] = df["Created"].dt.strftime("%Y-%W")
+        df["Week"] = df["Created"].dt.to_period("W").astype(str)
         return df
 
     except Exception as e:
@@ -245,36 +245,54 @@ def render_export_tab(team_summary):
     st.subheader("Export Summary")
     st.download_button("Download Summary CSV", data=team_summary.to_csv(index=False), file_name="team_productivity.csv")
 
-def render_quality_tab(bugs_df, story_df):
+def render_quality_tab(bugs_df):
     st.subheader("Bug and Quality Metrics")
 
     if bugs_df.empty:
         st.warning("No bug data available.")
         return
 
-    # Bug Trend
+    # Ensure 'Week' column exists in correct format
+    bugs_df["Created"] = pd.to_datetime(bugs_df["Created"])
+    bugs_df["Week"] = bugs_df["Created"].dt.strftime("%Y-%W")  # Example: 2025-25
+
+    # Recent 6 weeks in the same format
+    today = datetime.today()
+    recent_weeks = pd.date_range(end=today, periods=6, freq='W-MON')
+    recent_weeks_str = [dt.strftime("%Y-%W") for dt in recent_weeks]
+
+    # 1. Bug trend overall by week
     st.markdown("### 📈 Bug Trends by Week")
     weekly_bugs = bugs_df.groupby("Week").size().reset_index(name="Bug Count")
+    weekly_bugs = weekly_bugs[weekly_bugs["Week"].isin(recent_weeks_str)].sort_values("Week")
+
     chart = alt.Chart(weekly_bugs).mark_line(point=True).encode(
-        x=alt.X("Week", title="Week"),
+        x=alt.X("Week:N", title="Week"),
         y=alt.Y("Bug Count", title="Bug Count")
     ).properties(height=250)
     st.altair_chart(chart, use_container_width=True)
+    st.dataframe(weekly_bugs)
 
-    # Bugs per Developer
-    st.markdown("### 🧑‍💻 Bugs per Developer")
-    dev_bugs = bugs_df.groupby("Assignee").size().reset_index(name="Bug Count")
-    st.dataframe(dev_bugs)
+    # 2. Developer-level bug breakdown
+    st.markdown("### 👩‍💻 Developer Bug Breakdown")
+    dev_option = st.selectbox("Select Developer:", options=sorted(bugs_df["Developer"].dropna().unique()))
+    df_dev = bugs_df[bugs_df["Developer"] == dev_option]
+    dev_weekly = df_dev.groupby("Week").size().reset_index(name="Bug Count")
+    dev_weekly = dev_weekly[dev_weekly["Week"].isin(recent_weeks_str)].sort_values("Week")
 
-    # Bug Rate
-    st.markdown("### 🔢 Developer Quality Score (SP / Bugs)")
-    completed_df = story_df[story_df["Is Completed"]]
-    dev_sp = completed_df.groupby("Developer")["Story Points"].sum().reset_index()
-    quality_df = pd.merge(dev_sp, dev_bugs, left_on="Developer", right_on="Assignee", how="left").fillna(0)
-    quality_df["Bug Count"] = quality_df["Bug Count"].astype(int)
-    quality_df["Quality Score"] = quality_df.apply(lambda row: round(row["Story Points"] / (1 + row["Bug Count"]), 2), axis=1)
-    st.dataframe(quality_df[["Developer", "Story Points", "Bug Count", "Quality Score"]])
+    dev_chart = alt.Chart(dev_weekly).mark_line(point=True).encode(
+        x=alt.X("Week:N", title="Week"),
+        y=alt.Y("Bug Count", title="Bugs Reported")
+    ).properties(height=250)
+    st.altair_chart(dev_chart, use_container_width=True)
+    st.dataframe(dev_weekly)
 
+    # 3. Insights
+    st.markdown("### 💬 Insights")
+    top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
+    st.write("**Top Bug Reporters:**")
+    st.dataframe(top_buggers.head(5))
+    
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
     st.title("📊 Weekly Productivity Dashboard")
@@ -320,7 +338,7 @@ def main():
         render_export_tab(team_summary)
 
     with tabs[4]:
-        render_quality_tab(bugs_df, df)
+        render_quality_tab(bugs_df)
 
 if __name__ == "__main__":
     main()
