@@ -27,7 +27,8 @@ DEVELOPERS = [
 def load_jira_data():
     from requests.auth import HTTPBasicAuth
 
-    url = f"{st.secrets['JIRA_URL']}/rest/api/3/search"
+    jira_domain = st.secrets["JIRA_DOMAIN"]
+    url = f"https://{jira_domain}/rest/api/3/search"
     auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
     headers = {"Accept": "application/json"}
     jql = f"filter={st.secrets['JIRA_FILTER_ID']}&maxResults=1000"
