@@ -344,6 +344,12 @@ def render_ai_assistant_tab(df, bugs_df):
             st.error("Incorrect access code. Please try again.")
         return
 
+    # 🔄 Clear context & history button
+    if st.button("🔁 Clear Context & Chat History"):
+        st.session_state.pop("chat_context", None)
+        st.session_state.chat_history.clear()
+        st.rerun()
+
     # 🧬 Filter data for past 1 year
     ist = pytz.timezone("Asia/Kolkata")
     now_ist = datetime.now(ist)
@@ -354,24 +360,24 @@ def render_ai_assistant_tab(df, bugs_df):
     df_filtered = df[df["Due Date"] >= one_year_ago_naive]
     bugs_filtered = bugs_df[bugs_df["Created"] >= one_year_ago_aware]
 
-    # 📊 Aggregate story points (completed and in-progress) and bugs per developer
-    completed_sp = df_filtered[df_filtered["Is Completed"]].groupby("Developer")["Story Points"].sum().astype(int)
-    inprogress_sp = df_filtered[~df_filtered["Is Completed"]].groupby("Developer")["Story Points"].sum().astype(int)
-    bug_count_by_dev = bugs_filtered.groupby("Developer").size().to_dict()
+    # ✅ Cache compact context if not already set
+    if "chat_context" not in st.session_state:
+        completed_sp = df_filtered[df_filtered["Is Completed"]].groupby("Developer")["Story Points"].sum().astype(int)
+        inprogress_sp = df_filtered[~df_filtered["Is Completed"]].groupby("Developer")["Story Points"].sum().astype(int)
+        bug_count_by_dev = bugs_filtered.groupby("Developer").size().to_dict()
 
-    # 📦 Build compact context
-    developer_context_lines = []
-    all_developers = set(completed_sp.index).union(inprogress_sp.index).union(bug_count_by_dev.keys())
-    for dev in sorted(all_developers):
-        sp_done = completed_sp.get(dev, 0)
-        sp_inprogress = inprogress_sp.get(dev, 0)
-        bugs = bug_count_by_dev.get(dev, 0)
-        developer_context_lines.append(f"- {dev}: {sp_done} SP completed, {sp_inprogress} SP in-progress, {bugs} bugs")
+        developer_context_lines = []
+        all_developers = set(completed_sp.index).union(inprogress_sp.index).union(bug_count_by_dev.keys())
+        for dev in sorted(all_developers):
+            sp_done = completed_sp.get(dev, 0)
+            sp_inprogress = inprogress_sp.get(dev, 0)
+            bugs = bug_count_by_dev.get(dev, 0)
+            developer_context_lines.append(f"- {dev}: {sp_done} SP completed, {sp_inprogress} SP in-progress, {bugs} bugs")
 
-    context = (
-        "Developer Summary (Past 1 Year):\n" +
-        "\n".join(developer_context_lines)
-    )
+        st.session_state.chat_context = (
+            "Developer Summary (Past 1 Year):\n" +
+            "\n".join(developer_context_lines)
+        )
 
     # 🌤 Prompt input
     st.markdown("---")
@@ -388,7 +394,7 @@ def render_ai_assistant_tab(df, bugs_df):
                         model="gpt-3.5-turbo",
                         messages=[
                             {"role": "system", "content": "You are an analytical assistant that answers questions using the developer story points and bug data provided."},
-                            {"role": "user", "content": f"Context:\n{context}"},
+                            {"role": "user", "content": f"Context:\n{st.session_state.chat_context}"},
                             {"role": "user", "content": user_input}
                         ]
                     )
