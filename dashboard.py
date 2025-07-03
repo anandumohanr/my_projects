@@ -442,8 +442,10 @@ def render_ai_assistant_tab(df, bugs_df):
                             "content": (
                                 "You are an analytical assistant. Use only the markdown tables provided in the context to answer questions about developer performance. "
                                 "Count rows and values exactly. Do not assume, estimate, or guess. "
-                                "If developers tie in counts or rankings, mention all of them clearly. "
-                                "Your responses should be precise, grounded in the data, and avoid interpretation beyond what's shown."
+                                "Treat completed story points as a measure of productivity. "
+                                "Treat the number of bugs created as a negative indicator of code quality. "
+                                "Do not confuse bugs created with bug fixing. "
+                                "If developers tie in counts, mention all of them. Be factual, grounded, and concise in your response."
                             )
                             },
                             {"role": "user", "content": f"Context:\n{st.session_state.chat_context}"},
