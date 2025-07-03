@@ -323,9 +323,11 @@ def render_message(sender, message):
         """, unsafe_allow_html=True)
 
 def render_ai_assistant_tab(df, bugs_df):
+    import re
+    from dateutil.relativedelta import relativedelta
+
     st.subheader("🤖 AI Assistant (via OpenAI)")
 
-    # 🔐 Access control using secret code
     if not st.session_state.authenticated:
         with st.form("auth_form"):
             access_code_input = st.text_input("🔐 Enter access code to use AI assistant:", type="password")
@@ -344,86 +346,85 @@ def render_ai_assistant_tab(df, bugs_df):
             st.error("Incorrect access code. Please try again.")
         return
 
-    # 🔄 Clear context & history button
     if st.button("🔁 Clear Context & Chat History"):
         st.session_state.pop("chat_context", None)
         st.session_state.chat_history.clear()
         st.rerun()
 
-    # 🧬 Filter data for past 1 year
     ist = pytz.timezone("Asia/Kolkata")
     now_ist = datetime.now(ist)
-    one_year_ago_aware = now_ist - timedelta(days=365)
-    one_year_ago_naive = one_year_ago_aware.replace(tzinfo=None)
 
-    # Use correct type per DataFrame
-    df_filtered = df[df["Due Date"] >= one_year_ago_naive]
-    bugs_filtered = bugs_df[bugs_df["Created"] >= one_year_ago_aware]
+    # Extract dynamic timeframe from last question if exists
+    def extract_date_range_from_prompt(prompt):
+        prompt = prompt.lower()
+        today = now_ist.date()
+        if "current week" in prompt or "this week" in prompt:
+            start = (now_ist - timedelta(days=now_ist.weekday())).date()
+            return (start, today)
+        if "last few weeks" in prompt:
+            return ((now_ist - timedelta(weeks=4)).date(), today)
+        if m := re.search(r"last (\d+) days", prompt):
+            return ((now_ist - timedelta(days=int(m.group(1)))).date(), today)
+        if m := re.search(r"last (\d+) weeks", prompt):
+            return ((now_ist - timedelta(weeks=int(m.group(1)))).date(), today)
+        if "last 5 days" in prompt:
+            return ((now_ist - timedelta(days=5)).date(), today)
+        return ((now_ist - timedelta(weeks=4)).date(), today)  # default 4 weeks
 
-    # ✅ Cache compact context if not already set
-    if "chat_context" not in st.session_state:
-        ist = pytz.timezone("Asia/Kolkata")
-        now_ist = datetime.now(ist)
-        four_weeks_ago_aware = now_ist - timedelta(weeks=4)
-        four_weeks_ago_naive = four_weeks_ago_aware.replace(tzinfo=None)
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
-        df_recent = df[df["Due Date"] >= four_weeks_ago_naive].copy()
-        bugs_recent = bugs_df[bugs_df["Created"] >= four_weeks_ago_aware].copy()
+    last_prompt = st.session_state.chat_history[0][0] if st.session_state.chat_history else ""
+    start_date, end_date = extract_date_range_from_prompt(last_prompt)
 
-        df_recent["Due Date"] = pd.to_datetime(df_recent["Due Date"])
-        bugs_recent["Created"] = pd.to_datetime(bugs_recent["Created"])
+    # Filter data by date range
+    df["Due Date"] = pd.to_datetime(df["Due Date"])
+    bugs_df["Created"] = pd.to_datetime(bugs_df["Created"])
+    df_recent = df[(df["Due Date"].dt.date >= start_date) & (df["Due Date"].dt.date <= end_date)].copy()
+    bugs_recent = bugs_df[(bugs_df["Created"].dt.date >= start_date) & (bugs_df["Created"].dt.date <= end_date)].copy()
 
-        context_lines = ["## Developer Activity Summary (Last 4 Weeks)\n"]
+    context_lines = [f"## Developer Activity Summary ({start_date} to {end_date})\n"]
 
-        all_devs = set(df_recent["Developer"].dropna().unique()).union(bugs_recent["Developer"].dropna().unique())
+    all_devs = set(df_recent["Developer"].dropna().unique()).union(bugs_recent["Developer"].dropna().unique())
 
-        for dev in sorted(all_devs):
-            lines = [f"### 👨‍💻 {dev}"]
+    for dev in sorted(all_devs):
+        lines = [f"### 👨‍💼 {dev}"]
 
-            # Completed Tasks
-            completed = df_recent[(df_recent["Developer"] == dev) & (df_recent["Is Completed"])]
-            if not completed.empty:
-                total_sp = int(completed["Story Points"].sum())
-                lines.append(f"**Completed Tasks: {len(completed)} task(s), {total_sp} SP total**")
-                for _, row in completed.sort_values("Due Date", ascending=False).iterrows():
-                    task_date = row["Due Date"].date()
-                    task_key = row["Key"]
-                    story_points = int(row["Story Points"])
-                    lines.append(f"- {task_key} ({task_date}) – {story_points} SP")
-            else:
-                lines.append("**Completed Tasks: 0**")
+        completed = df_recent[(df_recent["Developer"] == dev) & (df_recent["Is Completed"])]
+        if not completed.empty:
+            lines.append("**Completed Tasks:**")
+            lines.append("| Date | Key | Story Points |")
+            lines.append("|------|-----|---------------|")
+            for _, row in completed.sort_values("Due Date", ascending=False).iterrows():
+                lines.append(f"| {row['Due Date'].date()} | {row['Key']} | {int(row['Story Points'])} |")
+        else:
+            lines.append("**Completed Tasks:** None")
 
-            # In-Progress Tasks
-            inprogress = df_recent[(df_recent["Developer"] == dev) & (~df_recent["Is Completed"])]
-            if not inprogress.empty:
-                total_sp = int(inprogress["Story Points"].sum())
-                lines.append(f"**In-Progress Tasks: {len(inprogress)} task(s), {total_sp} SP total**")
-                for _, row in inprogress.sort_values("Due Date").iterrows():
-                    task_key = row["Key"]
-                    story_points = int(row["Story Points"])
-                    due_date = row["Due Date"].date()
-                    lines.append(f"- {task_key} (Due: {due_date}) – {story_points} SP")
-            else:
-                lines.append("**In-Progress Tasks: 0**")
+        inprogress = df_recent[(df_recent["Developer"] == dev) & (~df_recent["Is Completed"])]
+        if not inprogress.empty:
+            lines.append("**In-Progress Tasks:**")
+            lines.append("| Key | Story Points | Due Date |")
+            lines.append("|-----|---------------|-----------|")
+            for _, row in inprogress.sort_values("Due Date").iterrows():
+                lines.append(f"| {row['Key']} | {int(row['Story Points'])} | {row['Due Date'].date()} |")
+        else:
+            lines.append("**In-Progress Tasks:** None")
 
-            # Bugs
-            dev_bugs = bugs_recent[bugs_recent["Developer"] == dev]
-            if not dev_bugs.empty:
-                bug_count = len(dev_bugs)
-                lines.append(f"**Bugs Created: {bug_count}**")
-                for _, row in dev_bugs.sort_values("Created", ascending=False).iterrows():
-                    bug_date = row["Created"].date()
-                    bug_key = row["Key"]
-                    lines.append(f"- {bug_key} ({bug_date})")
-            else:
-                lines.append("**Bugs Created: 0**")
+        dev_bugs = bugs_recent[bugs_recent["Developer"] == dev]
+        if not dev_bugs.empty:
+            lines.append("**Bugs Created:**")
+            lines.append("| Date | Bug ID |")
+            lines.append("|------|--------|")
+            for _, row in dev_bugs.sort_values("Created", ascending=False).iterrows():
+                lines.append(f"| {row['Created'].date()} | {row['Key']} |")
+        else:
+            lines.append("**Bugs Created:** None")
 
-            lines.append("")  # spacing
-            context_lines.extend(lines)
+        lines.append("")
+        context_lines.extend(lines)
 
-        st.session_state.chat_context = "\n".join(context_lines)
+    st.session_state.chat_context = "\n".join(context_lines)
 
-    # 🌤 Prompt input
     st.markdown("---")
     st.markdown("Ask me anything about developer productivity or bugs 👇")
     with st.form("chat_form", clear_on_submit=True):
@@ -437,17 +438,7 @@ def render_ai_assistant_tab(df, bugs_df):
                     response = client.chat.completions.create(
                         model="gpt-4o",
                         messages=[
-                            {
-                            "role": "system",
-                            "content": (
-                                "You are an analytical assistant. Use only the markdown tables provided in the context to answer questions about developer performance. "
-                                "Count rows and values exactly. Do not assume, estimate, or guess. "
-                                "Treat completed story points as a measure of productivity. "
-                                "Treat the number of bugs created as a negative indicator of code quality. "
-                                "Do not confuse bugs created with bug fixing. "
-                                "If developers tie in counts, mention all of them. Be factual, grounded, and concise in your response."
-                            )
-                            },
+                            {"role": "system", "content": "You are an analytical assistant. Only use the markdown tables provided to analyze developer performance. Count rows exactly. Do not estimate or assume. Always identify the correct highest and lowest counts explicitly. If developers tie, mention all of them. Be precise when reporting numbers."},
                             {"role": "user", "content": f"Context:\n{st.session_state.chat_context}"},
                             {"role": "user", "content": user_input}
                         ]
@@ -461,6 +452,7 @@ def render_ai_assistant_tab(df, bugs_df):
     for q, a in st.session_state.chat_history:
         render_message("user", q)
         render_message("assistant", a)
+
 
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
