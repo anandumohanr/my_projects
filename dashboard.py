@@ -8,6 +8,7 @@ import altair as alt
 import pytz
 import time
 from requests.auth import HTTPBasicAuth
+import openai
 
 # Constants
 SHAREPOINT_URL = "https://impelsysinc-my.sharepoint.com/:x:/g/personal/anandu_m_medlern_com/EXxi7DECTpxDgA-Hx44P-G8B-PgU74kHUVKlz3VfbTNX5w?download=1"
@@ -294,7 +295,113 @@ def render_quality_tab(bugs_df):
     top_buggers = bugs_df.groupby("Developer").size().reset_index(name="Bug Count").sort_values("Bug Count", ascending=False)
     st.write("**Top Bug Reporters:**")
     st.dataframe(top_buggers.head(5))
-    
+
+# Chat history session init
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# Flag to indicate code was successfully verified
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "auth_attempted" not in st.session_state:
+    st.session_state.auth_attempted = False
+if "auth_failed" not in st.session_state:
+    st.session_state.auth_failed = False
+
+def render_message(sender, message):
+    if sender == "user":
+        st.markdown(f"""
+        <div style="background-color:#DCF8C6; padding:10px 15px; border-radius:10px; margin:5px 0; text-align:right">
+            <b>🧑 You:</b> {message}
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style="background-color:#F1F0F0; padding:10px 15px; border-radius:10px; margin:5px 0; text-align:left">
+            <b>🤖 AI:</b> {message}
+        </div>
+        """, unsafe_allow_html=True)
+
+def render_ai_assistant_tab(df, bugs_df):
+    st.subheader("🤖 AI Assistant (via OpenAI)")
+
+    # 🔐 Access control using secret code
+    if not st.session_state.authenticated:
+        with st.form("auth_form"):
+            access_code_input = st.text_input("🔐 Enter access code to use AI assistant:", type="password")
+            submitted_auth = st.form_submit_button("Submit")
+
+            if submitted_auth:
+                st.session_state.auth_attempted = True
+                if access_code_input == st.secrets.get("ACCESS_CODE"):
+                    st.session_state.authenticated = True
+                    st.session_state.auth_failed = False
+                    st.rerun()
+                else:
+                    st.session_state.auth_failed = True
+
+        if st.session_state.auth_failed:
+            st.error("Incorrect access code. Please try again.")
+        return
+
+    # 🧬 Filter data for past 1 year
+    ist = pytz.timezone("Asia/Kolkata")
+    now_ist = datetime.now(ist)
+    one_year_ago_aware = now_ist - timedelta(days=365)
+    one_year_ago_naive = one_year_ago_aware.replace(tzinfo=None)
+
+    # Use correct type per DataFrame
+    df_filtered = df[df["Due Date"] >= one_year_ago_naive]
+    bugs_filtered = bugs_df[bugs_df["Created"] >= one_year_ago_aware]
+
+    # 📊 Aggregate story points (completed and in-progress) and bugs per developer
+    completed_sp = df_filtered[df_filtered["Is Completed"]].groupby("Developer")["Story Points"].sum().astype(int)
+    inprogress_sp = df_filtered[~df_filtered["Is Completed"]].groupby("Developer")["Story Points"].sum().astype(int)
+    bug_count_by_dev = bugs_filtered.groupby("Developer").size().to_dict()
+
+    # 📦 Build compact context
+    developer_context_lines = []
+    all_developers = set(completed_sp.index).union(inprogress_sp.index).union(bug_count_by_dev.keys())
+    for dev in sorted(all_developers):
+        sp_done = completed_sp.get(dev, 0)
+        sp_inprogress = inprogress_sp.get(dev, 0)
+        bugs = bug_count_by_dev.get(dev, 0)
+        developer_context_lines.append(f"- {dev}: {sp_done} SP completed, {sp_inprogress} SP in-progress, {bugs} bugs")
+
+    context = (
+        "Developer Summary (Past 1 Year):\n" +
+        "\n".join(developer_context_lines)
+    )
+
+    # 🌤 Prompt input
+    st.markdown("---")
+    st.markdown("Ask me anything about developer productivity or bugs 👇")
+    with st.form("chat_form", clear_on_submit=True):
+        user_input = st.text_input("Type your message here...", key="user_input_text", label_visibility="collapsed")
+        submitted = st.form_submit_button("Send")
+
+        if submitted and user_input:
+            with st.spinner("Thinking..."):
+                try:
+                    client = openai.OpenAI(api_key=st.secrets["OPENAI"]["API_KEY"])
+                    response = client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are an analytical assistant that answers questions using the developer story points and bug data provided."},
+                            {"role": "user", "content": f"Context:\n{context}"},
+                            {"role": "user", "content": user_input}
+                        ]
+                    )
+                    reply = response.choices[0].message.content
+                    st.session_state.chat_history.insert(0, (user_input, reply))
+                except Exception as e:
+                    st.error(f"OpenAI error: {e}")
+                    return
+
+    for q, a in st.session_state.chat_history:
+        render_message("user", q)
+        render_message("assistant", a)
+
 def main():
     st.set_page_config("Productivity Dashboard", layout="wide")
     st.title("📊 Weekly Productivity Dashboard")
@@ -325,7 +432,7 @@ def main():
     }
     selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
 
-    tabs = st.tabs(["Summary", "Trends", "Tasks", "Quality"])
+    tabs = st.tabs(["Summary", "Trends", "Tasks", "Quality", "AI Assistant"])
 
     with tabs[0]:
         summary_df, team_summary = render_summary_tab(df, selected_week)
@@ -338,6 +445,9 @@ def main():
 
     with tabs[3]:
         render_quality_tab(bugs_df)
+
+    with tabs[4]:
+        render_ai_assistant_tab(df, bugs_df)
 
 if __name__ == "__main__":
     main()
