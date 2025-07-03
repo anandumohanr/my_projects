@@ -370,48 +370,55 @@ def render_ai_assistant_tab(df, bugs_df):
         df_recent = df[df["Due Date"] >= four_weeks_ago_naive].copy()
         bugs_recent = bugs_df[bugs_df["Created"] >= four_weeks_ago_aware].copy()
 
-        # Ensure dates are datetime
         df_recent["Due Date"] = pd.to_datetime(df_recent["Due Date"])
         bugs_recent["Created"] = pd.to_datetime(bugs_recent["Created"])
 
-        context_lines = ["Developer Activity Summary (Last 4 Weeks):\n"]
+        context_lines = ["## Developer Activity Summary (Last 4 Weeks)\n"]
 
         all_devs = set(df_recent["Developer"].dropna().unique()).union(bugs_recent["Developer"].dropna().unique())
 
         for dev in sorted(all_devs):
-            lines = [f"👨‍💻 {dev}"]
+            lines = [f"### 👨‍💻 {dev}"]
 
-            # Completed tasks
+            # Completed Tasks
             completed = df_recent[(df_recent["Developer"] == dev) & (df_recent["Is Completed"])]
             if not completed.empty:
-                lines.append("Completed Tasks:")
+                total_sp = int(completed["Story Points"].sum())
+                lines.append(f"**Completed Tasks: {len(completed)} task(s), {total_sp} SP total**")
                 for _, row in completed.sort_values("Due Date", ascending=False).iterrows():
-                    date_str = row["Due Date"].strftime("%Y-%m-%d")
-                    lines.append(f"- {date_str}: {row['Key']} ({int(row['Story Points'])} SP)")
+                    task_date = row["Due Date"].date()
+                    task_key = row["Key"]
+                    story_points = int(row["Story Points"])
+                    lines.append(f"- {task_key} ({task_date}) – {story_points} SP")
             else:
-                lines.append("Completed Tasks: None")
+                lines.append("**Completed Tasks: 0**")
 
-            # In-progress tasks
+            # In-Progress Tasks
             inprogress = df_recent[(df_recent["Developer"] == dev) & (~df_recent["Is Completed"])]
             if not inprogress.empty:
-                lines.append("In-Progress Tasks:")
+                total_sp = int(inprogress["Story Points"].sum())
+                lines.append(f"**In-Progress Tasks: {len(inprogress)} task(s), {total_sp} SP total**")
                 for _, row in inprogress.sort_values("Due Date").iterrows():
-                    due_str = row["Due Date"].strftime("%Y-%m-%d")
-                    lines.append(f"- {row['Key']} ({int(row['Story Points'])} SP), due {due_str}")
+                    task_key = row["Key"]
+                    story_points = int(row["Story Points"])
+                    due_date = row["Due Date"].date()
+                    lines.append(f"- {task_key} (Due: {due_date}) – {story_points} SP")
             else:
-                lines.append("In-Progress Tasks: None")
+                lines.append("**In-Progress Tasks: 0**")
 
             # Bugs
             dev_bugs = bugs_recent[bugs_recent["Developer"] == dev]
             if not dev_bugs.empty:
-                lines.append("Bugs Created:")
+                bug_count = len(dev_bugs)
+                lines.append(f"**Bugs Created: {bug_count}**")
                 for _, row in dev_bugs.sort_values("Created", ascending=False).iterrows():
-                    created_str = row["Created"].strftime("%Y-%m-%d")
-                    lines.append(f"- {created_str}: {row['Key']}")
+                    bug_date = row["Created"].date()
+                    bug_key = row["Key"]
+                    lines.append(f"- {bug_key} ({bug_date})")
             else:
-                lines.append("Bugs Created: None")
+                lines.append("**Bugs Created: 0**")
 
-            lines.append("")  # spacing between developers
+            lines.append("")  # spacing
             context_lines.extend(lines)
 
         st.session_state.chat_context = "\n".join(context_lines)
@@ -428,9 +435,17 @@ def render_ai_assistant_tab(df, bugs_df):
                 try:
                     client = openai.OpenAI(api_key=st.secrets["OPENAI"]["API_KEY"])
                     response = client.chat.completions.create(
-                        model="gpt-3.5-turbo",
+                        model="gpt-4o",
                         messages=[
-                            {"role": "system", "content": "You are an analytical assistant that answers questions using the developer story points and bug data provided."},
+                            {
+                            "role": "system",
+                            "content": (
+                                "You are an analytical assistant. Use only the markdown tables provided in the context to answer questions about developer performance. "
+                                "Count rows and values exactly. Do not assume, estimate, or guess. "
+                                "If developers tie in counts or rankings, mention all of them clearly. "
+                                "Your responses should be precise, grounded in the data, and avoid interpretation beyond what's shown."
+                            )
+                            },
                             {"role": "user", "content": f"Context:\n{st.session_state.chat_context}"},
                             {"role": "user", "content": user_input}
                         ]
