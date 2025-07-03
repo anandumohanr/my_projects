@@ -438,7 +438,17 @@ def render_ai_assistant_tab(df, bugs_df):
                     response = client.chat.completions.create(
                         model="gpt-4o",
                         messages=[
-                            {"role": "system", "content": "You are an analytical assistant. Only use the markdown tables provided to analyze developer performance. Count rows exactly. Do not estimate or assume. Always identify the correct highest and lowest counts explicitly. If developers tie, mention all of them. Be precise when reporting numbers."},
+                            {
+                            "role": "system",
+                            "content": (
+                                "You are an analytical assistant. Use only the markdown tables provided in the context to answer questions about developer performance. "
+                                "Count rows and values exactly. Do not assume or estimate. "
+                                "Treat completed story points as a measure of productivity. "
+                                "Treat the number of bugs created as a negative indicator of code quality. "
+                                "Do not confuse bugs created with bug fixing. "
+                                "If developers tie in counts, mention all of them. Be factual, grounded, and concise in your response."
+                            )
+                            },
                             {"role": "user", "content": f"Context:\n{st.session_state.chat_context}"},
                             {"role": "user", "content": user_input}
                         ]
