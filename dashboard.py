@@ -362,22 +362,59 @@ def render_ai_assistant_tab(df, bugs_df):
 
     # ✅ Cache compact context if not already set
     if "chat_context" not in st.session_state:
-        completed_sp = df_filtered[df_filtered["Is Completed"]].groupby("Developer")["Story Points"].sum().astype(int)
-        inprogress_sp = df_filtered[~df_filtered["Is Completed"]].groupby("Developer")["Story Points"].sum().astype(int)
-        bug_count_by_dev = bugs_filtered.groupby("Developer").size().to_dict()
+        ist = pytz.timezone("Asia/Kolkata")
+        now_ist = datetime.now(ist)
+        four_weeks_ago_aware = now_ist - timedelta(weeks=4)
+        four_weeks_ago_naive = four_weeks_ago_aware.replace(tzinfo=None)
 
-        developer_context_lines = []
-        all_developers = set(completed_sp.index).union(inprogress_sp.index).union(bug_count_by_dev.keys())
-        for dev in sorted(all_developers):
-            sp_done = completed_sp.get(dev, 0)
-            sp_inprogress = inprogress_sp.get(dev, 0)
-            bugs = bug_count_by_dev.get(dev, 0)
-            developer_context_lines.append(f"- {dev}: {sp_done} SP completed, {sp_inprogress} SP in-progress, {bugs} bugs")
+        df_recent = df[df["Due Date"] >= four_weeks_ago_naive].copy()
+        bugs_recent = bugs_df[bugs_df["Created"] >= four_weeks_ago_aware].copy()
 
-        st.session_state.chat_context = (
-            "Developer Summary (Past 1 Year):\n" +
-            "\n".join(developer_context_lines)
-        )
+        # Ensure dates are datetime
+        df_recent["Due Date"] = pd.to_datetime(df_recent["Due Date"])
+        bugs_recent["Created"] = pd.to_datetime(bugs_recent["Created"])
+
+        context_lines = ["Developer Activity Summary (Last 4 Weeks):\n"]
+
+        all_devs = set(df_recent["Developer"].dropna().unique()).union(bugs_recent["Developer"].dropna().unique())
+
+        for dev in sorted(all_devs):
+            lines = [f"👨‍💻 {dev}"]
+
+            # Completed tasks
+            completed = df_recent[(df_recent["Developer"] == dev) & (df_recent["Is Completed"])]
+            if not completed.empty:
+                lines.append("Completed Tasks:")
+                for _, row in completed.sort_values("Due Date", ascending=False).iterrows():
+                    date_str = row["Due Date"].strftime("%Y-%m-%d")
+                    lines.append(f"- {date_str}: {row['Key']} ({int(row['Story Points'])} SP)")
+            else:
+                lines.append("Completed Tasks: None")
+
+            # In-progress tasks
+            inprogress = df_recent[(df_recent["Developer"] == dev) & (~df_recent["Is Completed"])]
+            if not inprogress.empty:
+                lines.append("In-Progress Tasks:")
+                for _, row in inprogress.sort_values("Due Date").iterrows():
+                    due_str = row["Due Date"].strftime("%Y-%m-%d")
+                    lines.append(f"- {row['Key']} ({int(row['Story Points'])} SP), due {due_str}")
+            else:
+                lines.append("In-Progress Tasks: None")
+
+            # Bugs
+            dev_bugs = bugs_recent[bugs_recent["Developer"] == dev]
+            if not dev_bugs.empty:
+                lines.append("Bugs Created:")
+                for _, row in dev_bugs.sort_values("Created", ascending=False).iterrows():
+                    created_str = row["Created"].strftime("%Y-%m-%d")
+                    lines.append(f"- {created_str}: {row['Key']}")
+            else:
+                lines.append("Bugs Created: None")
+
+            lines.append("")  # spacing between developers
+            context_lines.extend(lines)
+
+        st.session_state.chat_context = "\n".join(context_lines)
 
     # 🌤 Prompt input
     st.markdown("---")
