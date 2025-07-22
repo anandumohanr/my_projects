@@ -251,68 +251,145 @@ def render_quality_tab(bugs_df):
     st.dataframe(grouped)
 
 def render_ai_assistant_tab(df, bugs_df):
+    import re
+    from dateutil.relativedelta import relativedelta
+
     st.subheader("🤖 AI Assistant (via OpenAI)")
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
+
     if not st.session_state.authenticated:
         with st.form("auth_form"):
             access_code_input = st.text_input("🔐 Enter access code to use AI assistant:", type="password")
             submitted_auth = st.form_submit_button("Submit")
-            if submitted_auth and access_code_input == st.secrets.get("ACCESS_CODE"):
-                st.session_state.authenticated = True
-                st.rerun()
+
+            if submitted_auth:
+                st.session_state.auth_attempted = True
+                if access_code_input == st.secrets.get("ACCESS_CODE"):
+                    st.session_state.authenticated = True
+                    st.session_state.auth_failed = False
+                    st.rerun()
+                else:
+                    st.session_state.auth_failed = True
+
+        if st.session_state.auth_failed:
+            st.error("Incorrect access code. Please try again.")
         return
 
     if st.button("🔁 Clear Context & Chat History"):
-        st.session_state.chat_history = []
+        st.session_state.pop("chat_context", None)
+        st.session_state.chat_history.clear()
         st.rerun()
 
     ist = pytz.timezone("Asia/Kolkata")
     now_ist = datetime.now(ist)
-    prompt = st.text_input("Ask about productivity or bugs", key="user_input_text")
-    if prompt:
-        start = now_ist - timedelta(weeks=4)
-        df_recent = df[(df["Due Date"] >= start) & (df["Due Date"] <= now_ist)]
-        bugs_recent = bugs_df[(bugs_df["Created"] >= start) & (bugs_df["Created"] <= now_ist)]
-        context = []
-        for dev in sorted(set(df_recent["Developer"]).union(bugs_recent["Developer"])):
-            completed = df_recent[(df_recent["Developer"] == dev) & df_recent["Is Completed"]]
-            inprogress = df_recent[(df_recent["Developer"] == dev) & (~df_recent["Is Completed"])]
-            bugs = bugs_recent[bugs_recent["Developer"] == dev]
-            context.append(f"### {dev}")
-            if not completed.empty:
-                context.append("**Completed Tasks:**")
-                for _, r in completed.iterrows():
-                    context.append(f"- {r['Key']} ({r['Story Points']} SP)")
-            if not inprogress.empty:
-                context.append("**In-Progress Tasks:**")
-                for _, r in inprogress.iterrows():
-                    context.append(f"- {r['Key']} ({r['Story Points']} SP)")
-            if not bugs.empty:
-                context.append("**Bugs Created:**")
-                for _, r in bugs.iterrows():
-                    context.append(f"- {r['Key']}")
-        full_context = "".join(context)
-        with st.spinner("Thinking..."):
-            try:
-                client = openai.OpenAI(api_key=st.secrets["OPENAI"]["API_KEY"])
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {"role": "system", "content": "You are a factual assistant. Use only the context to respond."},
-                        {"role": "user", "content": f"Context:
-{full_context}"},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                reply = response.choices[0].message.content
-                st.session_state.chat_history.insert(0, (prompt, reply))
-            except Exception as e:
-                st.error(f"OpenAI error: {e}")
 
-    for q, a in st.session_state.get("chat_history", []):
-        st.markdown(f"**🧑 You:** {q}")
-        st.markdown(f"**🤖 AI:** {a}")
+    # Extract dynamic timeframe from last question if exists
+    def extract_date_range_from_prompt(prompt):
+        prompt = prompt.lower()
+        today = now_ist.date()
+        if "current week" in prompt or "this week" in prompt:
+            start = (now_ist - timedelta(days=now_ist.weekday())).date()
+            return (start, today)
+        if "last few weeks" in prompt:
+            return ((now_ist - timedelta(weeks=4)).date(), today)
+        if m := re.search(r"last (\d+) days", prompt):
+            return ((now_ist - timedelta(days=int(m.group(1)))).date(), today)
+        if m := re.search(r"last (\d+) weeks", prompt):
+            return ((now_ist - timedelta(weeks=int(m.group(1)))).date(), today)
+        if "last 5 days" in prompt:
+            return ((now_ist - timedelta(days=5)).date(), today)
+        return ((now_ist - timedelta(weeks=4)).date(), today)  # default 4 weeks
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    last_prompt = st.session_state.chat_history[0][0] if st.session_state.chat_history else ""
+    start_date, end_date = extract_date_range_from_prompt(last_prompt)
+
+    # Filter data by date range
+    df["Due Date"] = pd.to_datetime(df["Due Date"])
+    bugs_df["Created"] = pd.to_datetime(bugs_df["Created"])
+    df_recent = df[(df["Due Date"].dt.date >= start_date) & (df["Due Date"].dt.date <= end_date)].copy()
+    bugs_recent = bugs_df[(bugs_df["Created"].dt.date >= start_date) & (bugs_df["Created"].dt.date <= end_date)].copy()
+
+    context_lines = [f"## Developer Activity Summary ({start_date} to {end_date})\n"]
+
+    all_devs = set(df_recent["Developer"].dropna().unique()).union(bugs_recent["Developer"].dropna().unique())
+
+    for dev in sorted(all_devs):
+        lines = [f"### 👨‍💼 {dev}"]
+
+        completed = df_recent[(df_recent["Developer"] == dev) & (df_recent["Is Completed"])]
+        if not completed.empty:
+            lines.append("**Completed Tasks:**")
+            lines.append("| Date | Key | Story Points |")
+            lines.append("|------|-----|---------------|")
+            for _, row in completed.sort_values("Due Date", ascending=False).iterrows():
+                lines.append(f"| {row['Due Date'].date()} | {row['Key']} | {int(row['Story Points'])} |")
+        else:
+            lines.append("**Completed Tasks:** None")
+
+        inprogress = df_recent[(df_recent["Developer"] == dev) & (~df_recent["Is Completed"])]
+        if not inprogress.empty:
+            lines.append("**In-Progress Tasks:**")
+            lines.append("| Key | Story Points | Due Date |")
+            lines.append("|-----|---------------|-----------|")
+            for _, row in inprogress.sort_values("Due Date").iterrows():
+                lines.append(f"| {row['Key']} | {int(row['Story Points'])} | {row['Due Date'].date()} |")
+        else:
+            lines.append("**In-Progress Tasks:** None")
+
+        dev_bugs = bugs_recent[bugs_recent["Developer"] == dev]
+        if not dev_bugs.empty:
+            lines.append("**Bugs Created:**")
+            lines.append("| Date | Bug ID |")
+            lines.append("|------|--------|")
+            for _, row in dev_bugs.sort_values("Created", ascending=False).iterrows():
+                lines.append(f"| {row['Created'].date()} | {row['Key']} |")
+        else:
+            lines.append("**Bugs Created:** None")
+
+        lines.append("")
+        context_lines.extend(lines)
+
+    st.session_state.chat_context = "\n".join(context_lines)
+
+    st.markdown("---")
+    st.markdown("Ask me anything about developer productivity or bugs 👇")
+    with st.form("chat_form", clear_on_submit=True):
+        user_input = st.text_input("Type your message here...", key="user_input_text", label_visibility="collapsed")
+        submitted = st.form_submit_button("Send")
+
+        if submitted and user_input:
+            with st.spinner("Thinking..."):
+                try:
+                    client = openai.OpenAI(api_key=st.secrets["OPENAI"]["API_KEY"])
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {
+                            "role": "system",
+                            "content": (
+                                "You are an analytical assistant. Use only the markdown tables provided in the context to answer questions about developer performance. "
+                                "Count rows and values exactly. Do not assume or estimate. "
+                                "Treat completed story points as a measure of productivity. "
+                                "Treat the number of bugs created as a negative indicator of code quality. "
+                                "Do not confuse bugs created with bug fixing. "
+                                "If developers tie in counts, mention all of them. Be factual, grounded, and concise in your response."
+                            )
+                            },
+                            {"role": "user", "content": f"Context:\n{st.session_state.chat_context}"},
+                            {"role": "user", "content": user_input}
+                        ]
+                    )
+                    reply = response.choices[0].message.content
+                    st.session_state.chat_history.insert(0, (user_input, reply))
+                except Exception as e:
+                    st.error(f"OpenAI error: {e}")
+                    return
+
+    for q, a in st.session_state.chat_history:
+        render_message("user", q)
+        render_message("assistant", a)
 
 def main():
     st.set_page_config("📊 Team Productivity Dashboard", layout="wide")
