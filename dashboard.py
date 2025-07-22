@@ -312,14 +312,16 @@ def render_quality_tab(bugs_df):
     bugs = bugs_df.copy()
     bugs["Bugs"] = 1
 
-    # 🧠 Generate all period-dev combinations to fill zeros
-    full_index = pd.MultiIndex.from_product([
-        sorted(bugs[period].dropna().unique()),
-        sorted(bugs["Developer"].dropna().unique())
-    ], names=[period, "Developer"])
-    grouped = bugs.groupby([period, "Developer"])["Bugs"].sum().reindex(full_index, fill_value=0).reset_index()
+    # 🧠 Generate all combinations of period + developer to fill missing ones with 0
+    unique_periods = sorted(bugs[period].dropna().unique())
+    unique_devs = sorted(bugs["Developer"].dropna().unique())
+    full_index = pd.MultiIndex.from_product([unique_periods, unique_devs], names=[period, "Developer"])
 
-    # ✅ Compute sort order for developers by total bugs
+    # 🧮 Group and reindex to fill missing combos
+    grouped_raw = bugs.groupby([period, "Developer"])["Bugs"].sum()
+    grouped = grouped_raw.reindex(full_index, fill_value=0).reset_index()
+
+    # ✅ Compute developer sort order by total bugs across all periods
     dev_order = (
         grouped.groupby("Developer")["Bugs"].sum()
         .sort_values(ascending=False)
@@ -327,7 +329,7 @@ def render_quality_tab(bugs_df):
         .tolist()
     )
 
-    # 🧾 Format period for X-axis
+    # 🧾 Format period labels for display
     def format_period(x):
         if period == "Week":
             return str(x)
@@ -340,7 +342,7 @@ def render_quality_tab(bugs_df):
 
     grouped["Formatted Period"] = grouped[period].apply(format_period)
 
-    # 🟦 Plot with Altair, preserving developer color and stacking order
+    # 📊 Altair chart with correct stacking order
     chart = alt.Chart(grouped).mark_bar().encode(
         x=alt.X("Formatted Period:N", title=period),
         y=alt.Y("Bugs", title="Bug Count"),
@@ -349,6 +351,7 @@ def render_quality_tab(bugs_df):
 
     st.altair_chart(chart, use_container_width=True)
     st.dataframe(grouped.rename(columns={"Formatted Period": period}))
+
 
 
 # Chat history session init
