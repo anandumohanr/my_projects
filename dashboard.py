@@ -101,6 +101,37 @@ def load_bug_data():
         st.error(f"Failed to fetch Bug data: {e}")
         return pd.DataFrame()
 
+# 🆕 Utility function to format period display
+@st.cache_data(show_spinner=False)
+def format_period_display(value, period_type):
+    if period_type == "Month":
+        return value.strftime("%b-%Y").upper()  # Example: JUL-2025
+    if period_type == "Quarter":
+        quarter = (value.month - 1) // 3 + 1
+        return f"Q{quarter}-{value.year}"
+    if period_type == "Year":
+        return str(value)
+    return value
+
+# 🆕 Format period scope string
+@st.cache_data(show_spinner=False)
+def format_period_scope(row, period):
+    if period == "Week":
+        start = row.to_period("W").start_time.date()
+        end = row.to_period("W").end_time.date()
+    elif period == "Month":
+        start = row.to_period("M").start_time.date()
+        end = row.to_period("M").end_time.date()
+    elif period == "Quarter":
+        start = row.to_period("Q").start_time.date()
+        end = row.to_period("Q").end_time.date()
+    elif period == "Year":
+        start = datetime(row, 1, 1).date()
+        end = datetime(row, 12, 31).date()
+    else:
+        return ""
+    return f"{format_period_display(row, period)} ({start.strftime('%d-%b-%Y').upper()} to {end.strftime('%d-%b-%Y').upper()})"
+
 def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
     filtered_df = df[df["Week"] == selected_week]
@@ -181,6 +212,7 @@ def render_trend_tab(df):
     period = st.selectbox("View By", ["Week", "Month", "Quarter", "Year"], key="trend_period")
     developer = st.selectbox("Developer", sorted(df["Developer"].dropna().unique()), key="trend_dev")
     df_dev = df[(df["Developer"] == developer) & (df["Is Completed"])]
+
     if period == "Week":
         group_col = "Week"
     elif period == "Month":
@@ -189,25 +221,52 @@ def render_trend_tab(df):
         group_col = "Quarter"
     else:
         group_col = "Year"
+
     trend_data = df_dev.groupby(group_col)["Story Points"].sum().reset_index()
 
     if trend_data.empty:
         st.info("No data available.")
         return
 
+    def format_scope(row):
+        if period == "Week":
+            start = df_dev[df_dev[group_col] == row]["Due Date"].min().date()
+            end = df_dev[df_dev[group_col] == row]["Due Date"].max().date()
+            return f"{row} ({start.strftime('%d-%b-%Y').upper()} to {end.strftime('%d-%b-%Y').upper()})"
+        elif period == "Month":
+            start = row.to_period("M").start_time.date()
+            end = row.to_period("M").end_time.date()
+            return f"{row.strftime('%b-%Y').upper()} ({start.strftime('%d-%b-%Y').upper()} to {end.strftime('%d-%b-%Y').upper()})"
+        elif period == "Quarter":
+            start = row.to_period("Q").start_time.date()
+            end = row.to_period("Q").end_time.date()
+            quarter = f"Q{((row.month - 1) // 3) + 1}-{row.year}"
+            return f"{quarter} ({start.strftime('%d-%b-%Y').upper()} to {end.strftime('%d-%b-%Y').upper()})"
+        elif period == "Year":
+            start = datetime(row, 1, 1).date()
+            end = datetime(row, 12, 31).date()
+            return f"{row} ({start.strftime('%d-%b-%Y').upper()} to {end.strftime('%d-%b-%Y').upper()})"
+
+    trend_data["Label"] = trend_data[group_col].apply(lambda x: x.strftime('%b-%Y').upper() if period == "Month" else (f"Q{((x.month - 1) // 3) + 1}-{x.year}" if period == "Quarter" else str(x)))
+    trend_data["Scope"] = trend_data[group_col].apply(lambda x: format_scope(x))
+
     trend_chart = alt.Chart(trend_data).mark_line(point=True).encode(
-        x=alt.X(f"{group_col}:N", title=period),
+        x=alt.X("Label:N", title=period),
         y=alt.Y("Story Points", title="Completed Story Points"),
-        tooltip=[group_col, "Story Points"]
+        tooltip=["Scope", "Story Points"]
     ).properties(height=300)
 
     st.altair_chart(trend_chart, use_container_width=True)
-    st.dataframe(trend_data)
+    st.dataframe(trend_data[["Scope", "Story Points"]].rename(columns={"Scope": period}))
 
 def render_team_trend(df):
     st.subheader("👥 Team Trend")
     period = st.selectbox("Team View By", ["Week", "Month", "Quarter", "Year"], key="team_period")
     df_team = df[df["Is Completed"]]
+    if df_team.empty:
+        st.info("No story point data available.")
+        return
+
     if period == "Week":
         group_col = "Week"
     elif period == "Month":
@@ -216,16 +275,25 @@ def render_team_trend(df):
         group_col = "Quarter"
     else:
         group_col = "Year"
-    grouped = df_team.groupby(group_col)["Story Points"].sum().reset_index()
-    grouped.columns = [group_col, "Total SP"]
+
+    grouped = df_team.groupby([group_col, "Developer"])["Story Points"].sum().reset_index()
+    grouped = grouped.dropna(subset=["Developer"])
+    grouped["Period"] = grouped[group_col].apply(lambda x: x.strftime('%b-%Y').upper() if period == "Month" else (f"Q{((x.month - 1) // 3) + 1}-{x.year}" if period == "Quarter" else str(x)))
+    grouped = grouped[["Period", "Developer", "Story Points"]]
+
+    if grouped.empty:
+        st.info("No team summary available.")
+        return
 
     chart = alt.Chart(grouped).mark_bar().encode(
-        x=alt.X(f"{group_col}:N", title=period),
-        y=alt.Y("Total SP", title="Team Story Points")
+        x=alt.X("Period:N", title=period),
+        y=alt.Y("Story Points:Q", title="Team Story Points"),
+        color="Developer:N"
     ).properties(height=300)
 
     st.altair_chart(chart, use_container_width=True)
     st.dataframe(grouped)
+
 
 def render_quality_tab(bugs_df):
     st.subheader("🐞 Bug and Quality Metrics")
