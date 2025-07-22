@@ -312,7 +312,7 @@ def render_quality_tab(bugs_df):
     bugs = bugs_df.copy()
     bugs["Bugs"] = 1
 
-    # Compute bug count per period and developer
+    # Full period-developer matrix
     full_index = pd.MultiIndex.from_product([
         sorted(bugs[period].dropna().unique()),
         sorted(bugs["Developer"].dropna().unique())
@@ -320,30 +320,36 @@ def render_quality_tab(bugs_df):
 
     grouped = bugs.groupby([period, "Developer"])["Bugs"].sum().reindex(full_index, fill_value=0).reset_index()
 
-    # Format x-axis label
+    # Format x-axis
     if period == "Month":
         grouped["Label"] = grouped[period].dt.strftime('%b-%Y').str.upper()
     elif period == "Quarter":
         grouped["Label"] = grouped[period].apply(lambda x: f"Q{((x.month - 1) // 3) + 1}-{x.year}")
+    elif period == "Year":
+        grouped["Label"] = grouped[period].astype(str)
     else:
         grouped["Label"] = grouped[period].astype(str)
 
-    # Sort developers by total bug count DESC
-    dev_bug_totals = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False).index.tolist()
-    grouped["Developer"] = pd.Categorical(grouped["Developer"], categories=dev_bug_totals, ordered=True)
+    # Get global bug totals to sort stack order
+    bug_totals = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False)
+    dev_order = bug_totals.index.tolist()
+
+    # Force Developer column as ordered category
+    grouped["Developer"] = pd.Categorical(grouped["Developer"], categories=dev_order, ordered=True)
+
+    # ✅ Sort rows to force stacked bar order
+    grouped = grouped.sort_values(["Label", "Developer"])
 
     st.altair_chart(
         alt.Chart(grouped).mark_bar().encode(
             x=alt.X("Label:N", title=period),
             y=alt.Y("Bugs:Q", title="Bug Count"),
-            color="Developer:N"
+            color=alt.Color("Developer:N", sort=dev_order)  # preserve color order
         ).properties(height=300),
         use_container_width=True
     )
 
     st.dataframe(grouped[["Label", "Developer", "Bugs"]].rename(columns={"Label": period}))
-
-
 
 def render_ai_assistant_tab(df, bugs_df):
     import re
