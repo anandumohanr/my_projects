@@ -273,38 +273,38 @@ def render_team_trend(df):
             f"{x} ({df_team[df_team['Week'] == x]['Due Date'].min().strftime('%d-%b-%Y').upper()} to "
             f"{df_team[df_team['Week'] == x]['Due Date'].max().strftime('%d-%b-%Y').upper()})"
         )
+        labeler = lambda x: str(x)
     elif period == "Month":
         group_col = "Month"
         formatter = lambda x: (
-            f"{x.strftime('%b-%Y').upper()} "
-            f"({x.to_period('M').start_time.strftime('%d-%b-%Y').upper()} to {x.to_period('M').end_time.strftime('%d-%b-%Y').upper()})"
+            f"{x.strftime('%b-%Y').upper()} ({x.to_period('M').start_time.strftime('%d-%b-%Y').upper()} to {x.to_period('M').end_time.strftime('%d-%b-%Y').upper()})"
         )
+        labeler = lambda x: x.strftime('%b-%Y').upper()
     elif period == "Quarter":
         group_col = "Quarter"
         formatter = lambda x: (
-            f"Q{((x.month - 1) // 3) + 1}-{x.year} "
-            f"({x.to_period('Q').start_time.strftime('%d-%b-%Y').upper()} to {x.to_period('Q').end_time.strftime('%d-%b-%Y').upper()})"
+            f"Q{((x.month - 1) // 3) + 1}-{x.year} ({x.to_period('Q').start_time.strftime('%d-%b-%Y').upper()} to {x.to_period('Q').end_time.strftime('%d-%b-%Y').upper()})"
         )
+        labeler = lambda x: f"Q{((x.month - 1) // 3) + 1}-{x.year}"
     else:
         group_col = "Year"
-        formatter = lambda x: (
-            f"{x} (01-JAN-{x} to 31-DEC-{x})"
-        )
+        formatter = lambda x: f"{x} (01-JAN-{x} to 31-DEC-{x})"
+        labeler = lambda x: str(x)
 
-    grouped = df_team.groupby(group_col)["Story Points"].sum().reset_index()
-    grouped["Period"] = grouped[group_col].apply(formatter)
+    grouped_chart = df_team.groupby([group_col, "Developer"])["Story Points"].sum().reset_index()
+    grouped_chart["Period"] = grouped_chart[group_col].apply(labeler)
 
-    if grouped.empty:
-        st.info("No team summary available.")
-        return
+    grouped_table = df_team.groupby(group_col)["Story Points"].sum().reset_index()
+    grouped_table["Period"] = grouped_table[group_col].apply(formatter)
 
-    chart = alt.Chart(grouped).mark_bar().encode(
+    chart = alt.Chart(grouped_chart).mark_bar().encode(
         x=alt.X("Period:N", title=period),
-        y=alt.Y("Story Points:Q", title="Team Story Points")
+        y=alt.Y("Story Points:Q", title="Team Story Points"),
+        color="Developer:N"
     ).properties(height=300)
 
     st.altair_chart(chart, use_container_width=True)
-    st.dataframe(grouped[["Period", "Story Points"]])
+    st.dataframe(grouped_table[["Period", "Story Points"]].rename(columns={"Period": period}))
 
 def render_quality_tab(bugs_df):
     st.subheader("🐞 Bug and Quality Metrics")
