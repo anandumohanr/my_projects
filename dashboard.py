@@ -309,10 +309,11 @@ def render_team_trend(df):
 def render_quality_tab(bugs_df):
     st.subheader("🐞 Bug and Quality Metrics")
     period = st.selectbox("View Bugs By", ["Week", "Month", "Quarter", "Year"], key="bug_period")
+
     bugs = bugs_df.copy()
     bugs["Bugs"] = 1
 
-    # Full period-developer matrix
+    # Compute full index for missing combinations
     full_index = pd.MultiIndex.from_product([
         sorted(bugs[period].dropna().unique()),
         sorted(bugs["Developer"].dropna().unique())
@@ -320,36 +321,21 @@ def render_quality_tab(bugs_df):
 
     grouped = bugs.groupby([period, "Developer"])["Bugs"].sum().reindex(full_index, fill_value=0).reset_index()
 
-    # Format x-axis
-    if period == "Month":
-        grouped["Label"] = grouped[period].dt.strftime('%b-%Y').str.upper()
-    elif period == "Quarter":
-        grouped["Label"] = grouped[period].apply(lambda x: f"Q{((x.month - 1) // 3) + 1}-{x.year}")
-    elif period == "Year":
-        grouped["Label"] = grouped[period].astype(str)
-    else:
-        grouped["Label"] = grouped[period].astype(str)
+    # 🔁 Sort developers by total bugs descending
+    dev_order = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False).index.tolist()
 
-    # Get global bug totals to sort stack order
-    bug_totals = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False)
-    dev_order = bug_totals.index.tolist()
-
-    # Force Developer column as ordered category
-    grouped["Developer"] = pd.Categorical(grouped["Developer"], categories=dev_order, ordered=True)
-
-    # ✅ Sort rows to force stacked bar order
-    grouped = grouped.sort_values(["Label", "Developer"])
-
+    # 🧾 Chart
     st.altair_chart(
         alt.Chart(grouped).mark_bar().encode(
-            x=alt.X("Label:N", title=period),
-            y=alt.Y("Bugs:Q", title="Bug Count"),
-            color=alt.Color("Developer:N", sort=dev_order)  # preserve color order
+            x=alt.X(f"{period}:N", title=period),
+            y=alt.Y("Bugs", title="Bug Count"),
+            color=alt.Color("Developer:N", sort=dev_order)
         ).properties(height=300),
         use_container_width=True
     )
 
-    st.dataframe(grouped[["Label", "Developer", "Bugs"]].rename(columns={"Label": period}))
+    st.dataframe(grouped)
+
 
 # Chat history session init
 if "chat_history" not in st.session_state:
