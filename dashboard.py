@@ -319,7 +319,7 @@ def render_quality_tab(bugs_df):
 
     grouped = bugs.groupby([period, "Developer"])["Bugs"].sum().reindex(full_index, fill_value=0).reset_index()
 
-    # Short x-axis label formatting
+    # Format period for x-axis
     if period == "Month":
         grouped["Label"] = grouped[period].dt.strftime('%b-%Y').str.upper()
     elif period == "Quarter":
@@ -327,7 +327,7 @@ def render_quality_tab(bugs_df):
     else:
         grouped["Label"] = grouped[period].astype(str)
 
-    # Sort developer order by total bugs descending
+    # Sort developers by total bugs
     dev_order = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False).index.tolist()
     grouped["Developer"] = pd.Categorical(grouped["Developer"], categories=dev_order, ordered=True)
 
@@ -335,12 +335,15 @@ def render_quality_tab(bugs_df):
         alt.Chart(grouped).mark_bar().encode(
             x=alt.X("Label:N", title=period),
             y=alt.Y("Bugs", title="Bug Count"),
-            color=alt.Color("Developer", sort=dev_order)
+            color="Developer",
+            order=alt.Order("Developer", sort="descending")
         ).properties(height=300),
         use_container_width=True
     )
+
     st.dataframe(grouped[["Label", "Developer", "Bugs"]].rename(columns={"Label": period}))
-    
+
+
 def render_ai_assistant_tab(df, bugs_df):
     import re
     from dateutil.relativedelta import relativedelta
