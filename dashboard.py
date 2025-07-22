@@ -418,16 +418,17 @@ def main():
         row["Week"]: f"{row['Week']} ({row['Week Start'].strftime('%d-%B-%Y').upper()} to {(row['Week Start'] + timedelta(days=4)).strftime('%d-%B-%Y').upper()})"
         for _, row in week_options_df.iterrows()
     }
-    selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
 
     tabs = st.tabs(["Summary", "Trends", "Team View", "Tasks", "Quality", "AI Assistant"])
     with tabs[0]:
+        selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
         render_summary_tab(df, selected_week)
     with tabs[1]:
         render_trend_tab(df)
     with tabs[2]:
         render_team_trend(df)
     with tabs[3]:
+        selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x], key="task_week")
         filtered_df = df[df["Week"] == selected_week]
         st.dataframe(filtered_df[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points", "Week"]])
     with tabs[4]:
