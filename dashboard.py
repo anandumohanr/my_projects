@@ -353,14 +353,24 @@ def render_quality_tab(bugs_df):
     st.dataframe(pivot_df)
 
     # Option B: Sorted Developer Summary
+    buggy_period_df = grouped.sort_values(["Developer", "Bugs"], ascending=[True, False]).drop_duplicates("Developer")
+
     summary_df = grouped.groupby("Developer").agg(
         Total_Bugs=("Bugs", "sum"),
-        Most_Buggy_Period=("Formatted Period", lambda x: grouped[grouped["Developer"] == x.name].sort_values("Bugs", ascending=False).iloc[0]["Formatted Period"]),
         Max_Bugs_in_One_Period=("Bugs", "max")
-    ).reset_index().sort_values("Total_Bugs", ascending=False)
+    ).reset_index()
+
+    summary_df = summary_df.merge(
+        buggy_period_df[["Developer", "Formatted Period"]],
+        on="Developer",
+        how="left"
+    ).rename(columns={"Formatted Period": "Most_Buggy_Period"})
+
+    summary_df = summary_df.sort_values("Total_Bugs", ascending=False)
 
     st.markdown("#### 🧾 Developer Bug Summary")
     st.dataframe(summary_df)
+
 
 # Chat history session init
 if "chat_history" not in st.session_state:
