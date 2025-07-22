@@ -309,32 +309,46 @@ def render_team_trend(df):
 def render_quality_tab(bugs_df):
     st.subheader("🐞 Bug and Quality Metrics")
     period = st.selectbox("View Bugs By", ["Week", "Month", "Quarter", "Year"], key="bug_period")
-
     bugs = bugs_df.copy()
     bugs["Bugs"] = 1
 
-    # Compute full index for missing combinations
+    # 🧠 Generate all period-dev combinations to fill zeros
     full_index = pd.MultiIndex.from_product([
         sorted(bugs[period].dropna().unique()),
         sorted(bugs["Developer"].dropna().unique())
     ], names=[period, "Developer"])
-
     grouped = bugs.groupby([period, "Developer"])["Bugs"].sum().reindex(full_index, fill_value=0).reset_index()
 
-    # 🔁 Sort developers by total bugs descending
-    dev_order = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False).index.tolist()
-
-    # 🧾 Chart
-    st.altair_chart(
-        alt.Chart(grouped).mark_bar().encode(
-            x=alt.X(f"{period}:N", title=period),
-            y=alt.Y("Bugs", title="Bug Count"),
-            color=alt.Color("Developer:N", sort=dev_order)
-        ).properties(height=300),
-        use_container_width=True
+    # ✅ Compute sort order for developers by total bugs
+    dev_order = (
+        grouped.groupby("Developer")["Bugs"].sum()
+        .sort_values(ascending=False)
+        .reset_index()["Developer"]
+        .tolist()
     )
 
-    st.dataframe(grouped)
+    # 🧾 Format period for X-axis
+    def format_period(x):
+        if period == "Week":
+            return str(x)
+        elif period == "Month":
+            return x.strftime('%b-%Y').upper()
+        elif period == "Quarter":
+            return f"Q{((x.month - 1) // 3) + 1}-{x.year}"
+        elif period == "Year":
+            return str(x)
+
+    grouped["Formatted Period"] = grouped[period].apply(format_period)
+
+    # 🟦 Plot with Altair, preserving developer color and stacking order
+    chart = alt.Chart(grouped).mark_bar().encode(
+        x=alt.X("Formatted Period:N", title=period),
+        y=alt.Y("Bugs", title="Bug Count"),
+        color=alt.Color("Developer:N", sort=dev_order)
+    ).properties(height=300)
+
+    st.altair_chart(chart, use_container_width=True)
+    st.dataframe(grouped.rename(columns={"Formatted Period": period}))
 
 
 # Chat history session init
