@@ -384,6 +384,20 @@ if "auth_attempted" not in st.session_state:
 if "auth_failed" not in st.session_state:
     st.session_state.auth_failed = False
 
+def render_message(sender, message):
+    if sender == "user":
+        st.markdown(f"""
+        <div style="background-color:#DCF8C6; padding:10px 15px; border-radius:10px; margin:5px 0; text-align:right">
+            <b>🧑 You:</b> {message}
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style="background-color:#F1F0F0; padding:10px 15px; border-radius:10px; margin:5px 0; text-align:left">
+            <b>🤖 AI:</b> {message}
+        </div>
+        """, unsafe_allow_html=True)
+
 def render_ai_assistant_tab(df, bugs_df):
     import re
     from dateutil.relativedelta import relativedelta
