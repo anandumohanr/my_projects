@@ -336,18 +336,31 @@ def render_quality_tab(bugs_df):
     grouped["Formatted Period"] = grouped[period].apply(format_period)
     grouped = grouped.drop(columns=[period])  # Avoid column duplication
 
-    # Altair chart (with enforced developer stack order)
+    # Chart
     chart = alt.Chart(grouped).mark_bar().encode(
         x=alt.X("Formatted Period:N", title=period),
         y=alt.Y("Bugs", title="Bug Count"),
-        color=alt.Color("Developer:N", sort=dev_order)  # 🟢 Enforced stack order
+        color=alt.Color("Developer:N", sort=dev_order)
     ).properties(height=300)
 
     st.altair_chart(chart, use_container_width=True)
-    st.dataframe(grouped.rename(columns={"Formatted Period": period}))
 
+    # Option A: Pivot Table Developer vs Period
+    pivot_df = grouped.pivot_table(index="Developer", columns="Formatted Period", values="Bugs", fill_value=0)
+    pivot_df["Total Bugs"] = pivot_df.sum(axis=1)
+    pivot_df = pivot_df.sort_values("Total Bugs", ascending=False)
+    st.markdown("#### 📊 Developer-wise Bug Summary")
+    st.dataframe(pivot_df)
 
+    # Option B: Sorted Developer Summary
+    summary_df = grouped.groupby("Developer").agg(
+        Total_Bugs=("Bugs", "sum"),
+        Most_Buggy_Period=("Formatted Period", lambda x: grouped[grouped["Developer"] == x.name].sort_values("Bugs", ascending=False).iloc[0]["Formatted Period"]),
+        Max_Bugs_in_One_Period=("Bugs", "max")
+    ).reset_index().sort_values("Total_Bugs", ascending=False)
 
+    st.markdown("#### 🧾 Developer Bug Summary")
+    st.dataframe(summary_df)
 
 # Chat history session init
 if "chat_history" not in st.session_state:
