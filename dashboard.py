@@ -15,7 +15,7 @@ from dateutil.relativedelta import relativedelta
 
 # Constants
 COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
-DEVELOPERS = [
+DEVELOPERS = [f
     "Anandu Mohan", "Ravi Kumar", "shree.vidya", "Brijesh Kanchan", "Hari Prasad H S",
     "Fahad P K", "Venukumar DL", "Kishore C", "padmaja"
 ]
@@ -272,28 +272,20 @@ def render_ai_assistant_tab(df, bugs_df):
             completed = df_recent[(df_recent["Developer"] == dev) & df_recent["Is Completed"]]
             inprogress = df_recent[(df_recent["Developer"] == dev) & (~df_recent["Is Completed"])]
             bugs = bugs_recent[bugs_recent["Developer"] == dev]
-            context.append(f"### {dev}
-")
+            context.append(f"### {dev}")
             if not completed.empty:
-                context.append("**Completed Tasks:**
-")
+                context.append("**Completed Tasks:**")
                 for _, r in completed.iterrows():
-                    context.append(f"- {r['Key']} ({r['Story Points']} SP)
-")
+                    context.append(f"- {r['Key']} ({r['Story Points']} SP)")
             if not inprogress.empty:
-                context.append("**In-Progress Tasks:**
-")
+                context.append("**In-Progress Tasks:**")
                 for _, r in inprogress.iterrows():
-                    context.append(f"- {r['Key']} ({r['Story Points']} SP)
-")
+                    context.append(f"- {r['Key']} ({r['Story Points']} SP)")
             if not bugs.empty:
-                context.append("**Bugs Created:**
-")
+                context.append("**Bugs Created:**")
                 for _, r in bugs.iterrows():
-                    context.append(f"- {r['Key']}
-")
-        full_context = "
-".join(context)
+                    context.append(f"- {r['Key']}")
+        full_context = "".join(context)
         with st.spinner("Thinking..."):
             try:
                 client = openai.OpenAI(api_key=st.secrets["OPENAI"]["API_KEY"])
