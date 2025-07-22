@@ -312,6 +312,7 @@ def render_quality_tab(bugs_df):
     bugs = bugs_df.copy()
     bugs["Bugs"] = 1
 
+    # Compute bug count per period and developer
     full_index = pd.MultiIndex.from_product([
         sorted(bugs[period].dropna().unique()),
         sorted(bugs["Developer"].dropna().unique())
@@ -319,7 +320,7 @@ def render_quality_tab(bugs_df):
 
     grouped = bugs.groupby([period, "Developer"])["Bugs"].sum().reindex(full_index, fill_value=0).reset_index()
 
-    # Format period for x-axis
+    # Format x-axis label
     if period == "Month":
         grouped["Label"] = grouped[period].dt.strftime('%b-%Y').str.upper()
     elif period == "Quarter":
@@ -327,21 +328,21 @@ def render_quality_tab(bugs_df):
     else:
         grouped["Label"] = grouped[period].astype(str)
 
-    # Sort developers by total bugs
-    dev_order = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False).index.tolist()
-    grouped["Developer"] = pd.Categorical(grouped["Developer"], categories=dev_order, ordered=True)
+    # Sort developers by total bug count DESC
+    dev_bug_totals = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False).index.tolist()
+    grouped["Developer"] = pd.Categorical(grouped["Developer"], categories=dev_bug_totals, ordered=True)
 
     st.altair_chart(
         alt.Chart(grouped).mark_bar().encode(
             x=alt.X("Label:N", title=period),
-            y=alt.Y("Bugs", title="Bug Count"),
-            color="Developer",
-            order=alt.Order("Developer", sort="descending")
+            y=alt.Y("Bugs:Q", title="Bug Count"),
+            color="Developer:N"
         ).properties(height=300),
         use_container_width=True
     )
 
     st.dataframe(grouped[["Label", "Developer", "Bugs"]].rename(columns={"Label": period}))
+
 
 
 def render_ai_assistant_tab(df, bugs_df):
