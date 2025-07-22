@@ -269,17 +269,30 @@ def render_team_trend(df):
 
     if period == "Week":
         group_col = "Week"
+        formatter = lambda x: (
+            f"{x} ({df_team[df_team['Week'] == x]['Due Date'].min().strftime('%d-%b-%Y').upper()} to "
+            f"{df_team[df_team['Week'] == x]['Due Date'].max().strftime('%d-%b-%Y').upper()})"
+        )
     elif period == "Month":
         group_col = "Month"
+        formatter = lambda x: (
+            f"{x.strftime('%b-%Y').upper()} "
+            f"({x.to_period('M').start_time.strftime('%d-%b-%Y').upper()} to {x.to_period('M').end_time.strftime('%d-%b-%Y').upper()})"
+        )
     elif period == "Quarter":
         group_col = "Quarter"
+        formatter = lambda x: (
+            f"Q{((x.month - 1) // 3) + 1}-{x.year} "
+            f"({x.to_period('Q').start_time.strftime('%d-%b-%Y').upper()} to {x.to_period('Q').end_time.strftime('%d-%b-%Y').upper()})"
+        )
     else:
         group_col = "Year"
+        formatter = lambda x: (
+            f"{x} (01-JAN-{x} to 31-DEC-{x})"
+        )
 
-    grouped = df_team.groupby([group_col, "Developer"])["Story Points"].sum().reset_index()
-    grouped = grouped.dropna(subset=["Developer"])
-    grouped["Period"] = grouped[group_col].apply(lambda x: x.strftime('%b-%Y').upper() if period == "Month" else (f"Q{((x.month - 1) // 3) + 1}-{x.year}" if period == "Quarter" else str(x)))
-    grouped = grouped[["Period", "Developer", "Story Points"]]
+    grouped = df_team.groupby(group_col)["Story Points"].sum().reset_index()
+    grouped["Period"] = grouped[group_col].apply(formatter)
 
     if grouped.empty:
         st.info("No team summary available.")
@@ -287,13 +300,11 @@ def render_team_trend(df):
 
     chart = alt.Chart(grouped).mark_bar().encode(
         x=alt.X("Period:N", title=period),
-        y=alt.Y("Story Points:Q", title="Team Story Points"),
-        color="Developer:N"
+        y=alt.Y("Story Points:Q", title="Team Story Points")
     ).properties(height=300)
 
     st.altair_chart(chart, use_container_width=True)
-    st.dataframe(grouped)
-
+    st.dataframe(grouped[["Period", "Story Points"]])
 
 def render_quality_tab(bugs_df):
     st.subheader("🐞 Bug and Quality Metrics")
