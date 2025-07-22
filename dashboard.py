@@ -412,8 +412,9 @@ def main():
         if df.empty:
             st.stop()
 
-    week_options_df = df.dropna(subset=["Week", "Week Start"]).drop_duplicates("Week")[["Week", "Week Start"]]
+    week_options_df = df.dropna(subset=["Week", "Week Start"])
     week_options_df = week_options_df[week_options_df["Week Start"] <= datetime.today()]
+    week_options_df = week_options_df.sort_values("Week Start", ascending=False).drop_duplicates("Week Start")[["Week", "Week Start"]]
     week_label_map = {
         row["Week"]: f"{row['Week']} ({row['Week Start'].strftime('%d-%B-%Y').upper()} to {(row['Week Start'] + timedelta(days=4)).strftime('%d-%B-%Y').upper()})"
         for _, row in week_options_df.iterrows()
