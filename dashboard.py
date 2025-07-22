@@ -15,9 +15,16 @@ from dateutil.relativedelta import relativedelta
 
 # Constants
 COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
-DEVELOPERS = [f
-    "Anandu Mohan", "Ravi Kumar", "shree.vidya", "Brijesh Kanchan", "Hari Prasad H S",
-    "Fahad P K", "Venukumar DL", "Kishore C", "padmaja"
+DEVELOPERS = [
+    "Anandu Mohan",
+    "Ravi Kumar",
+    "shree.vidya",
+    "Brijesh Kanchan",
+    "Hari Prasad H S",
+    "Fahad P K",
+    "Venukumar DL",
+    "Kishore C",
+    "padmaja"
 ]
 
 @st.cache_data(ttl=14400, show_spinner=False)
