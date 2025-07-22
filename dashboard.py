@@ -351,6 +351,18 @@ def render_quality_tab(bugs_df):
 
     st.dataframe(grouped[["Label", "Developer", "Bugs"]].rename(columns={"Label": period}))
 
+# Chat history session init
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# Flag to indicate code was successfully verified
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "auth_attempted" not in st.session_state:
+    st.session_state.auth_attempted = False
+if "auth_failed" not in st.session_state:
+    st.session_state.auth_failed = False
+
 def render_ai_assistant_tab(df, bugs_df):
     import re
     from dateutil.relativedelta import relativedelta
