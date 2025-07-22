@@ -341,6 +341,7 @@ def render_quality_tab(bugs_df):
             return str(x)
 
     grouped["Formatted Period"] = grouped[period].apply(format_period)
+    grouped = grouped.drop(columns=[period])  # 🚨 Drop duplicate column
 
     # 📊 Altair chart with correct stacking order
     chart = alt.Chart(grouped).mark_bar().encode(
