@@ -312,24 +312,17 @@ def render_quality_tab(bugs_df):
     bugs = bugs_df.copy()
     bugs["Bugs"] = 1
 
-    # 🧠 Generate all combinations of period + developer to fill missing ones with 0
+    # Create all combinations to avoid missing data
     unique_periods = sorted(bugs[period].dropna().unique())
     unique_devs = sorted(bugs["Developer"].dropna().unique())
     full_index = pd.MultiIndex.from_product([unique_periods, unique_devs], names=[period, "Developer"])
+    grouped = bugs.groupby([period, "Developer"])["Bugs"].sum().reindex(full_index, fill_value=0).reset_index()
 
-    # 🧮 Group and reindex to fill missing combos
-    grouped_raw = bugs.groupby([period, "Developer"])["Bugs"].sum()
-    grouped = grouped_raw.reindex(full_index, fill_value=0).reset_index()
+    # Sort developers by total bugs (descending)
+    dev_order = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False).index.tolist()
+    grouped["Developer"] = pd.Categorical(grouped["Developer"], categories=dev_order, ordered=True)
 
-    # ✅ Compute developer sort order by total bugs across all periods
-    dev_order = (
-        grouped.groupby("Developer")["Bugs"].sum()
-        .sort_values(ascending=False)
-        .reset_index()["Developer"]
-        .tolist()
-    )
-
-    # 🧾 Format period labels for display
+    # Format period for display
     def format_period(x):
         if period == "Week":
             return str(x)
@@ -341,17 +334,18 @@ def render_quality_tab(bugs_df):
             return str(x)
 
     grouped["Formatted Period"] = grouped[period].apply(format_period)
-    grouped = grouped.drop(columns=[period])  # 🚨 Drop duplicate column
+    grouped = grouped.drop(columns=[period])  # Avoid column duplication
 
-    # 📊 Altair chart with correct stacking order
+    # Altair chart (with enforced developer stack order)
     chart = alt.Chart(grouped).mark_bar().encode(
         x=alt.X("Formatted Period:N", title=period),
         y=alt.Y("Bugs", title="Bug Count"),
-        color=alt.Color("Developer:N", sort=dev_order)
+        color=alt.Color("Developer:N", sort=dev_order)  # 🟢 Enforced stack order
     ).properties(height=300)
 
     st.altair_chart(chart, use_container_width=True)
     st.dataframe(grouped.rename(columns={"Formatted Period": period}))
+
 
 
 
