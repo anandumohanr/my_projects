@@ -400,6 +400,104 @@ def render_quality_tab(bugs_df):
     st.markdown("#### 🧾 Developer Bug Summary")
     st.dataframe(summary_df)
 
+def render_insights_tab(df, bugs_df):
+    import streamlit as st
+    import altair as alt
+    from datetime import datetime, timedelta
+    import numpy as np
+    import pandas as pd
+
+    st.header("📊 Developer Insights (Productivity, Defect Density, Delivery, Bugs)")
+
+    # --- Utility: Count working days ---
+    def count_working_days(start_date, end_date):
+        return sum(1 for d in pd.date_range(start=start_date, end=end_date) if d.weekday() < 5)
+
+    # --- Date Filtering ---
+    today = datetime.today().date()
+    default_start = today - timedelta(weeks=4)
+    min_date = df["Week Start"].min().date() if "Week Start" in df.columns else default_start
+    max_date = df["Week Start"].max().date() if "Week Start" in df.columns else today
+
+    filter_option = st.selectbox(
+        "Select Insight Duration",
+        ["Last 4 Weeks", "Last 3 Months", "Current Quarter", "Previous Quarter", "Custom Range"],
+        index=0
+    )
+
+    if filter_option == "Last 4 Weeks":
+        start_date = today - timedelta(weeks=4)
+        end_date = today
+    elif filter_option == "Last 3 Months":
+        start_date = today - timedelta(days=90)
+        end_date = today
+    elif filter_option == "Current Quarter":
+        current_month = today.month
+        quarter_start_month = 3 * ((current_month - 1) // 3) + 1
+        start_date = datetime(today.year, quarter_start_month, 1).date()
+        end_date = today
+    elif filter_option == "Previous Quarter":
+        current_month = today.month
+        quarter_start_month = 3 * ((current_month - 1) // 3) + 1
+        previous_quarter_end = datetime(today.year, quarter_start_month, 1) - timedelta(days=1)
+        quarter_start_month = 3 * ((previous_quarter_end.month - 1) // 3) + 1
+        start_date = datetime(previous_quarter_end.year, quarter_start_month, 1).date()
+        end_date = previous_quarter_end.date()
+    else:
+        start_date = st.date_input("Start Date", value=default_start, min_value=min_date, max_value=max_date)
+        end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=max_date)
+
+    # --- Data Filtering ---
+    df_filtered = df[(df["Week Start"].dt.date >= start_date) & (df["Week Start"].dt.date <= end_date) & (df["Is Completed"])]
+    bugs_filtered = bugs_df[(bugs_df["Week Start"].dt.date >= start_date) & (bugs_df["Week Start"].dt.date <= end_date)]
+
+    # --- SP and Bug Summary ---
+    sp_summary = df_filtered.groupby("Developer")["Story Points"].sum().reset_index().rename(columns={"Story Points": "Total SP"})
+    bug_summary = bugs_filtered.groupby("Developer").size().reset_index(name="Total Bugs")
+    merged = pd.merge(sp_summary, bug_summary, on="Developer", how="outer").fillna(0)
+
+    # --- Defect Density ---
+    merged["Defect Density"] = merged["Total Bugs"] / merged["Total SP"].replace(0, np.nan)
+    merged["Defect Density"] = merged["Defect Density"].fillna(0)
+
+    # --- Expected SP based on working days ---
+    working_days = count_working_days(start_date, end_date)
+    expected_sp_df = pd.DataFrame({
+        "Developer": merged["Developer"],
+        "Expected SP": working_days
+    })
+    merged = pd.merge(merged, expected_sp_df, on="Developer", how="left")
+    merged["Delivery %"] = merged["Total SP"] / merged["Expected SP"]
+    merged["Delivery"] = merged["Delivery %"].clip(upper=1)
+
+    # --- Normalize metrics for Radar Chart ---
+    def normalize(series):
+        return (series - series.min()) / (series.max() - series.min()) if series.max() > series.min() else series
+
+    merged["Productivity"] = normalize(merged["Total SP"])
+    merged["Quality"] = 1 - normalize(merged["Defect Density"])
+    merged["Bugs"] = 1 - normalize(merged["Total Bugs"])
+
+    # --- Display Tables ---
+    st.subheader("📈 Total Story Points (Filtered Period)")
+    st.dataframe(sp_summary)
+
+    st.subheader("🐞 Defect Density & Delivery")
+    st.dataframe(merged[["Developer", "Total SP", "Expected SP", "Total Bugs", "Defect Density", "Delivery %"]])
+
+    # --- Radar Charts ---
+    st.subheader("📌 KPI Radar Chart (Productivity, Quality, Delivery, Bugs)")
+    for _, row in merged.iterrows():
+        radar_df = pd.DataFrame({
+            "Metric": ["Productivity", "Quality", "Delivery", "Bugs"],
+            "Value": [row["Productivity"], row["Quality"], row["Delivery"], row["Bugs"]]
+        })
+        radar_chart = alt.Chart(radar_df).mark_line(closed=True).encode(
+            theta=alt.Theta("Metric", type="nominal"),
+            radius=alt.Radius("Value", scale=alt.Scale(domain=[0, 1])),
+            tooltip=["Metric", "Value"]
+        ).properties(title=f"KPI Radar for {row['Developer']}", height=300, width=300)
+        st.altair_chart(radar_chart)
 
 # Chat history session init
 if "chat_history" not in st.session_state:
@@ -597,7 +695,7 @@ def main():
         for _, row in week_options_df.iterrows()
     }
 
-    tabs = st.tabs(["Summary", "Trends", "Team View", "Tasks", "Quality", "AI Assistant"])
+    tabs = st.tabs(["Summary", "Trends", "Team View", "Tasks", "Quality", "Insights", "AI Assistant"])
     with tabs[0]:
         selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
         render_summary_tab(df, selected_week)
@@ -612,6 +710,8 @@ def main():
     with tabs[4]:
         render_quality_tab(bugs_df)
     with tabs[5]:
+        render_insights_tab(df, bugs_df)
+    with tabs[6]:
         render_ai_assistant_tab(df, bugs_df)
 
 if __name__ == "__main__":
