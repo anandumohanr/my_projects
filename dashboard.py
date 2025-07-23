@@ -204,33 +204,6 @@ def render_summary_tab(df, selected_week):
     total_completed = summary_df["Completed Points"].sum()
     team_productivity = round((total_completed / total_possible) * 100, 1) if total_possible else 0.0
 
-    st.markdown("### Active Developers with In-Progress Tasks")
-    active_in_progress = summary_df[summary_df["In Progress Points"] > 0]
-
-    if active_in_progress.empty:
-        st.write("None")
-    else:
-        if "expanded_dev" not in st.session_state:
-            st.session_state.expanded_dev = None
-
-        for _, row in active_in_progress.iterrows():
-            dev = row["Developer"]
-            dev_tasks = in_progress_df_all[in_progress_df_all["Developer"] == dev]
-            due_dates = dev_tasks["Due Date"].dropna().dt.strftime("%d-%b-%Y").unique()
-            due_str = ", ".join(sorted(due_dates))
-            is_expanded = st.session_state.expanded_dev == dev
-            with st.expander(f"🚧 {dev} - {row['In Progress Points']} SP | Due on: {due_str}", expanded=is_expanded):
-                if st.session_state.expanded_dev != dev:
-                    st.session_state.expanded_dev = dev
-                if not dev_tasks.empty:
-                    display_df = dev_tasks[["Key", "Summary", "Status", "Due Date", "Story Points"]].copy()
-                    display_df["Key"] = display_df["Key"].apply(
-                        lambda x: f"[{x}](https://impelsys.atlassian.net/browse/{x})" if isinstance(x, str) else x)
-                    display_df["Due Date"] = display_df["Due Date"].dt.strftime("%d-%b-%Y")
-                    st.markdown(display_df.to_markdown(index=False), unsafe_allow_html=True)
-                else:
-                    st.write("No task details available.")
-
     st.subheader("Team Overview")
     team_summary = pd.DataFrame({
         "Week": [selected_week],
