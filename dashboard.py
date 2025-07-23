@@ -479,7 +479,7 @@ def render_insights_tab(df, bugs_df):
 
         st.subheader("🧪 Quality Summary")
         quality_df = merged[["Developer", "Completed SP", "Total Bugs", "Bug Density", "Quality %", "Quality Numeric"]].copy()
-        quality_df["Bug Density"] = quality_df["Bug Density"].round(1)
+        quality_df["Bug Density"] = quality_df["Bug Density"].round(2)
         st.dataframe(
             quality_df.sort_values("Quality Numeric", ascending=False)
             .drop(columns=["Quality Numeric"])
