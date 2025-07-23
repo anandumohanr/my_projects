@@ -626,6 +626,58 @@ def render_ai_assistant_tab(df, bugs_df):
         render_message("user", q)
         render_message("assistant", a)
 
+def render_tasks_tab(df, bugs_df):
+    import streamlit as st
+    from datetime import datetime, timedelta
+    import pandas as pd
+
+    st.header("🗂️ Task & Bug Listings")
+
+    # --- Date Range Filter ---
+    today = datetime.today().date()
+    min_due = df["Due Date"].min().date()
+    max_due = df["Due Date"].max().date()
+    min_created = bugs_df["Created"].min().date()
+    max_created = bugs_df["Created"].max().date()
+
+    global_min = min(min_due, min_created)
+    global_max = max(max_due, max_created)
+
+    start_date = st.date_input("Start Date", value=today - timedelta(weeks=4), min_value=global_min, max_value=global_max)
+    end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=global_max)
+
+    # --- Developer Filter ---
+    all_devs = sorted(set(df["Developer"].dropna().unique()) | set(bugs_df["Developer"].dropna().unique()))
+    selected_devs = st.multiselect("Select Developer(s)", options=all_devs, default=all_devs)
+
+    # --- Filter Tasks ---
+    filtered_tasks = df[
+        (df["Due Date"].dt.date >= start_date) &
+        (df["Due Date"].dt.date <= end_date) &
+        (df["Developer"].isin(selected_devs))
+    ]
+
+    # --- Filter Bugs ---
+    filtered_bugs = bugs_df[
+        (bugs_df["Created"].dt.date >= start_date) &
+        (bugs_df["Created"].dt.date <= end_date) &
+        (bugs_df["Developer"].isin(selected_devs))
+    ]
+
+    # --- Show Tasks Table ---
+    st.subheader("✅ Tasks")
+    st.dataframe(
+        filtered_tasks[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points"]],
+        use_container_width=True
+    )
+
+    # --- Show Bugs Table ---
+    st.subheader("🐞 Bugs")
+    st.dataframe(
+        filtered_bugs[["Key", "Summary", "Developer", "Status", "Created", "Week"]],
+        use_container_width=True
+    )
+
 def main():
     st.set_page_config("📊 Team Productivity Dashboard", layout="wide")
     st.title("📊 Weekly Productivity Dashboard")
@@ -664,9 +716,7 @@ def main():
     with tabs[2]:
         render_team_trend(df)
     with tabs[3]:
-        selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x], key="task_week")
-        filtered_df = df[df["Week"] == selected_week]
-        st.dataframe(filtered_df[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points", "Week"]])
+        render_tasks_tab(df, bugs_df)
     with tabs[4]:
         render_quality_tab(bugs_df)
     with tabs[5]:
