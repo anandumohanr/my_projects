@@ -404,6 +404,8 @@ def render_insights_tab(df, bugs_df):
     import streamlit as st
     import altair as alt
     from datetime import datetime, timedelta
+    import pandas as pd
+    import numpy as np
 
     st.header("📊 Developer Insights (Productivity & Quality)")
 
@@ -451,7 +453,7 @@ def render_insights_tab(df, bugs_df):
     # --- SP Summary ---
     sp_summary = df_filtered.groupby("Developer")["Story Points"].sum().reset_index().rename(columns={"Story Points": "Completed SP"})
     sp_summary["Expected SP"] = count_working_days(start_date, end_date)
-    sp_summary["Productivity %"] = (sp_summary["Completed SP"] / sp_summary["Expected SP"] * 100).round(2)
+    sp_summary["Productivity %"] = (sp_summary["Completed SP"] / sp_summary["Expected SP"] * 100).round().fillna(0).astype(int).astype(str) + " %"
 
     # --- Bug Summary ---
     bug_summary = bugs_filtered.groupby("Developer").size().reset_index(name="Total Bugs")
@@ -465,20 +467,17 @@ def render_insights_tab(df, bugs_df):
         return (series - series.min()) / (series.max() - series.min()) if series.max() > series.min() else series
 
     merged["Quality %"] = 100 - normalize(merged["Bug Density"].fillna(merged["Bug Density"].max())) * 100
-    merged["Quality %"] = merged["Quality %"].where(merged["Completed SP"] > 0, np.nan).round(2)
+    merged["Quality %"] = merged["Quality %"].where(merged["Completed SP"] > 0, np.nan).round().fillna(0).astype(int).astype(str) + " %"
 
     # --- Show Tables ---
     st.subheader("✅ Productivity Summary")
     st.dataframe(merged[["Developer", "Completed SP", "Expected SP", "Productivity %"]].sort_values("Productivity %", ascending=False))
 
     st.subheader("🧪 Quality Summary")
-    quality_df = merged[["Developer", "Total Bugs", "Bug Density", "Quality %"]].copy()
-    quality_df = quality_df.sort_values("Quality %", ascending=False)
-    quality_df["Bug Density"] = quality_df["Bug Density"].round(2)
-    quality_df["Quality %"] = quality_df["Quality %"].round(2)
-    quality_df["Quality %"] = quality_df["Quality %"].fillna("N/A")
-    st.dataframe(quality_df)
-
+    quality_df = merged[["Developer", "Completed SP", "Total Bugs", "Bug Density", "Quality %"]].copy()
+    quality_df["Bug Density"] = quality_df["Bug Density"].round(1)
+    st.dataframe(quality_df.sort_values("Quality %", ascending=False))
+    
 # Chat history session init
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
