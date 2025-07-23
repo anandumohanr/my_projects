@@ -673,16 +673,23 @@ def render_tasks_tab(df, bugs_df):
     if selected_devs:
         filtered_bugs = filtered_bugs[filtered_bugs["Developer"].isin(selected_devs)]
 
+    # --- Format Dates ---
+    formatted_tasks = filtered_tasks.copy()
+    formatted_tasks["Due Date"] = formatted_tasks["Due Date"].dt.strftime("%d-%B-%Y").str.upper()
+
+    formatted_bugs = filtered_bugs.copy()
+    formatted_bugs["Created"] = pd.to_datetime(formatted_bugs["Created"]).dt.strftime("%d-%B-%Y").str.upper()
+
     # --- Show Tables ---
     st.subheader("✅ Tasks")
     st.dataframe(
-        filtered_tasks[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points"]],
+        formatted_tasks[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points"]],
         use_container_width=True
     )
 
     st.subheader("🐞 Bugs")
     st.dataframe(
-        filtered_bugs[["Key", "Summary", "Developer", "Created"]],
+        formatted_bugs[["Key", "Summary", "Developer", "Created"]],
         use_container_width=True
     )
 
