@@ -463,9 +463,10 @@ def render_insights_tab(df, bugs_df):
     # Calculate productivity
     sp_summary["Productivity Numeric"] = (
         (sp_summary["Completed SP"] / sp_summary["Expected SP"]) * 100
-    ).fillna(0).round()
+    ).round().fillna(0)
 
-    sp_summary["Productivity %"] = sp_summary["Productivity Numeric"].astype(int).astype(str) + " %"
+    sp_summary["Productivity %"] = sp_summary["Productivity Numeric"].fillna(0).astype(int).astype(str) + " %"
+
 
 
     # --- Bug Summary ---
