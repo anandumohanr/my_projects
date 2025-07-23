@@ -453,7 +453,10 @@ def render_insights_tab(df, bugs_df):
     # --- SP Summary ---
     sp_summary = df_filtered.groupby("Developer")["Story Points"].sum().reset_index().rename(columns={"Story Points": "Completed SP"})
     sp_summary["Expected SP"] = count_working_days(start_date, end_date)
-    sp_summary["Productivity Numeric"] = (sp_summary["Completed SP"] / sp_summary["Expected SP"] * 100).round().fillna(0)
+    sp_summary["Productivity Numeric"] = (
+        (sp_summary["Completed SP"] / sp_summary["Expected SP"]) * 100
+    ).fillna(0).round()
+
     sp_summary["Productivity %"] = sp_summary["Productivity Numeric"].astype(int).astype(str) + " %"
 
     # --- Bug Summary ---
