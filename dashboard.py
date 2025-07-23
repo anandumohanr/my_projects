@@ -492,7 +492,7 @@ def render_insights_tab(df, bugs_df):
             "Metric": ["Productivity", "Quality", "Delivery", "Bugs"],
             "Value": [row["Productivity"], row["Quality"], row["Delivery"], row["Bugs"]]
         })
-        radar_chart = alt.Chart(radar_df).mark_line(closed=True).encode(
+        radar_chart = alt.Chart(radar_df).mark_area().encode(
             theta=alt.Theta("Metric", type="nominal"),
             radius=alt.Radius("Value", scale=alt.Scale(domain=[0, 1])),
             tooltip=["Metric", "Value"]
