@@ -404,20 +404,17 @@ def render_insights_tab(df, bugs_df):
     import streamlit as st
     import altair as alt
     from datetime import datetime, timedelta
-    import numpy as np
-    import pandas as pd
 
-    st.header("📊 Developer Insights (Productivity, Defect Density, Delivery, Bugs)")
+    st.header("📊 Developer Insights (Productivity & Quality)")
 
-    # --- Utility: Count working days ---
     def count_working_days(start_date, end_date):
         return sum(1 for d in pd.date_range(start=start_date, end=end_date) if d.weekday() < 5)
 
-    # --- Date Filtering ---
+    # --- Date Filter ---
     today = datetime.today().date()
     default_start = today - timedelta(weeks=4)
-    min_date = df["Week Start"].min().date() if "Week Start" in df.columns else default_start
-    max_date = df["Week Start"].max().date() if "Week Start" in df.columns else today
+    min_date = df["Week Start"].min().date()
+    max_date = df["Week Start"].max().date()
 
     filter_option = st.selectbox(
         "Select Insight Duration",
@@ -433,57 +430,53 @@ def render_insights_tab(df, bugs_df):
         end_date = today
     elif filter_option == "Current Quarter":
         current_month = today.month
-        quarter_start_month = 3 * ((current_month - 1) // 3) + 1
-        start_date = datetime(today.year, quarter_start_month, 1).date()
+        quarter_start = 3 * ((current_month - 1) // 3) + 1
+        start_date = datetime(today.year, quarter_start, 1).date()
         end_date = today
     elif filter_option == "Previous Quarter":
         current_month = today.month
-        quarter_start_month = 3 * ((current_month - 1) // 3) + 1
-        previous_quarter_end = datetime(today.year, quarter_start_month, 1) - timedelta(days=1)
-        quarter_start_month = 3 * ((previous_quarter_end.month - 1) // 3) + 1
-        start_date = datetime(previous_quarter_end.year, quarter_start_month, 1).date()
-        end_date = previous_quarter_end.date()
+        quarter_start = 3 * ((current_month - 1) // 3) + 1
+        prev_q_end = datetime(today.year, quarter_start, 1) - timedelta(days=1)
+        quarter_start = 3 * ((prev_q_end.month - 1) // 3) + 1
+        start_date = datetime(prev_q_end.year, quarter_start, 1).date()
+        end_date = prev_q_end.date()
     else:
         start_date = st.date_input("Start Date", value=default_start, min_value=min_date, max_value=max_date)
         end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=max_date)
 
-    # --- Data Filtering ---
+    # --- Filter Data ---
     df_filtered = df[(df["Week Start"].dt.date >= start_date) & (df["Week Start"].dt.date <= end_date) & (df["Is Completed"])]
     bugs_filtered = bugs_df[(bugs_df["Week Start"].dt.date >= start_date) & (bugs_df["Week Start"].dt.date <= end_date)]
 
-    # --- SP and Bug Summary ---
-    sp_summary = df_filtered.groupby("Developer")["Story Points"].sum().reset_index().rename(columns={"Story Points": "Total SP"})
+    # --- SP Summary ---
+    sp_summary = df_filtered.groupby("Developer")["Story Points"].sum().reset_index().rename(columns={"Story Points": "Completed SP"})
+    sp_summary["Expected SP"] = count_working_days(start_date, end_date)
+    sp_summary["Productivity %"] = (sp_summary["Completed SP"] / sp_summary["Expected SP"] * 100).round(2)
+
+    # --- Bug Summary ---
     bug_summary = bugs_filtered.groupby("Developer").size().reset_index(name="Total Bugs")
-    merged = pd.merge(sp_summary, bug_summary, on="Developer", how="outer").fillna(0)
+    merged = pd.merge(sp_summary, bug_summary, on="Developer", how="outer").fillna({"Completed SP": 0, "Expected SP": count_working_days(start_date, end_date), "Total Bugs": 0})
 
-    # --- Defect Density ---
-    merged["Defect Density"] = merged["Total Bugs"] / merged["Total SP"].replace(0, np.nan)
-    merged["Defect Density"] = merged["Defect Density"].fillna(0)
+    # --- Bug Density ---
+    merged["Bug Density"] = np.where(merged["Completed SP"] == 0, np.nan, merged["Total Bugs"] / merged["Completed SP"])
 
-    # --- Expected SP based on working days ---
-    working_days = count_working_days(start_date, end_date)
-    expected_sp_df = pd.DataFrame({
-        "Developer": merged["Developer"],
-        "Expected SP": working_days
-    })
-    merged = pd.merge(merged, expected_sp_df, on="Developer", how="left")
-    merged["Delivery %"] = merged["Total SP"] / merged["Expected SP"]
-    merged["Delivery"] = merged["Delivery %"].clip(upper=1)
-
-    # --- Normalize metrics for Radar Chart ---
+    # --- Normalize for Quality % ---
     def normalize(series):
         return (series - series.min()) / (series.max() - series.min()) if series.max() > series.min() else series
 
-    merged["Productivity"] = normalize(merged["Total SP"])
-    merged["Quality"] = 1 - normalize(merged["Defect Density"])
-    merged["Bugs"] = 1 - normalize(merged["Total Bugs"])
+    merged["Quality %"] = 100 - normalize(merged["Bug Density"].fillna(merged["Bug Density"].max())) * 100
+    merged["Quality %"] = merged["Quality %"].where(merged["Completed SP"] > 0, np.nan).round(2)
 
-    # --- Display Tables ---
-    st.subheader("📈 Total Story Points (Filtered Period)")
-    st.dataframe(sp_summary)
+    # --- Show Tables ---
+    st.subheader("✅ Productivity Summary")
+    st.dataframe(merged[["Developer", "Completed SP", "Expected SP", "Productivity %"]].sort_values("Productivity %", ascending=False))
 
-    st.subheader("🐞 Defect Density & Delivery")
-    st.dataframe(merged[["Developer", "Total SP", "Expected SP", "Total Bugs", "Defect Density", "Delivery %"]])
+    st.subheader("🧪 Quality Summary")
+    st.dataframe(
+        merged[["Developer", "Total Bugs", "Bug Density", "Quality %"]]
+        .replace({np.nan: "N/A"})
+        .sort_values("Quality %", ascending=False)
+    )
 
 # Chat history session init
 if "chat_history" not in st.session_state:
