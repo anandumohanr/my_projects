@@ -403,20 +403,16 @@ def render_quality_tab(bugs_df):
 def render_insights_tab(df, bugs_df):
     import streamlit as st
     import altair as alt
-    from datetime import datetime, timedelta
-    import pandas as pd
-    import numpy as np
 
     st.header("📊 Developer Insights (Productivity & Quality)")
 
     def count_working_days(start_date, end_date):
         return sum(1 for d in pd.date_range(start=start_date, end=end_date) if d.weekday() < 5)
 
-    # --- Date Filter ---
     today = datetime.today().date()
     default_start = today - timedelta(weeks=4)
-    min_date = df["Week Start"].min().date()
-    max_date = df["Week Start"].max().date()
+    min_date = df["Due Date"].min().date()
+    max_date = df["Due Date"].max().date()
 
     filter_option = st.selectbox(
         "Select Insight Duration",
@@ -431,69 +427,63 @@ def render_insights_tab(df, bugs_df):
         start_date = today - timedelta(days=90)
         end_date = today
     elif filter_option == "Current Quarter":
-        current_month = today.month
-        quarter_start = 3 * ((current_month - 1) // 3) + 1
+        quarter_start = 3 * ((today.month - 1) // 3) + 1
         start_date = datetime(today.year, quarter_start, 1).date()
         end_date = today
     elif filter_option == "Previous Quarter":
-        current_month = today.month
-        quarter_start = 3 * ((current_month - 1) // 3) + 1
+        quarter_start = 3 * ((today.month - 1) // 3) + 1
         prev_q_end = datetime(today.year, quarter_start, 1) - timedelta(days=1)
-        quarter_start = 3 * ((prev_q_end.month - 1) // 3) + 1
-        start_date = datetime(prev_q_end.year, quarter_start, 1).date()
+        prev_q_start = 3 * ((prev_q_end.month - 1) // 3) + 1
+        start_date = datetime(prev_q_end.year, prev_q_start, 1).date()
         end_date = prev_q_end.date()
     else:
         start_date = st.date_input("Start Date", value=default_start, min_value=min_date, max_value=max_date)
         end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=max_date)
 
-    # --- Filter Data ---
-    df_filtered = df[(df["Week Start"].dt.date >= start_date) & (df["Week Start"].dt.date <= end_date) & (df["Is Completed"])]
-    bugs_filtered = bugs_df[(bugs_df["Week Start"].dt.date >= start_date) & (bugs_df["Week Start"].dt.date <= end_date)]
+    with st.spinner("🔄 Generating insights... Please wait."):
+        df_filtered = df[
+            (df["Due Date"].dt.date >= start_date) &
+            (df["Due Date"].dt.date <= end_date) &
+            (df["Is Completed"])
+        ]
+        bugs_filtered = bugs_df[
+            (bugs_df["Created"].dt.date >= start_date) &
+            (bugs_df["Created"].dt.date <= end_date)
+        ]
 
-    # --- SP Summary ---
-    sp_summary = df_filtered.groupby("Developer")["Story Points"].sum().reset_index().rename(columns={"Story Points": "Completed SP"})
+        sp_summary = df_filtered.groupby("Developer")["Story Points"].sum().reset_index().rename(columns={"Story Points": "Completed SP"})
+        all_devs = pd.DataFrame(df["Developer"].unique(), columns=["Developer"])
+        sp_summary = pd.merge(all_devs, sp_summary, on="Developer", how="left").fillna(0)
+        sp_summary["Expected SP"] = count_working_days(start_date, end_date)
+        sp_summary["Productivity Numeric"] = (sp_summary["Completed SP"] / sp_summary["Expected SP"] * 100).round().fillna(0)
+        sp_summary["Productivity %"] = sp_summary["Productivity Numeric"].fillna(0).astype(int).astype(str) + " %"
 
-    # Prepare expected SP for all developers (to avoid missing rows)
-    all_devs = pd.DataFrame(df["Developer"].unique(), columns=["Developer"])
-    sp_summary = pd.merge(all_devs, sp_summary, on="Developer", how="left")
+        bug_summary = bugs_filtered.groupby("Developer").size().reset_index(name="Total Bugs")
+        merged = pd.merge(sp_summary, bug_summary, on="Developer", how="outer").fillna({
+            "Completed SP": 0,
+            "Expected SP": count_working_days(start_date, end_date),
+            "Total Bugs": 0
+        })
 
-    sp_summary["Completed SP"] = sp_summary["Completed SP"].fillna(0)
-    sp_summary["Expected SP"] = count_working_days(start_date, end_date)
+        merged["Bug Density"] = np.where(merged["Completed SP"] == 0, np.nan, merged["Total Bugs"] / merged["Completed SP"]).round(3)
+        merged["Quality Numeric"] = 100 - (merged["Bug Density"] * 200)
+        merged["Quality Numeric"] = merged["Quality Numeric"].where(merged["Completed SP"] > 0, 0).clip(lower=0).round()
+        merged["Quality %"] = merged["Quality Numeric"].astype(int).astype(str) + " %"
 
-    # Calculate productivity
-    sp_summary["Productivity Numeric"] = (
-        (sp_summary["Completed SP"] / sp_summary["Expected SP"]) * 100
-    ).round().fillna(0)
+        st.subheader("✅ Productivity Summary")
+        st.dataframe(
+            merged[["Developer", "Completed SP", "Expected SP", "Productivity %", "Productivity Numeric"]]
+            .sort_values("Productivity Numeric", ascending=False)
+            .drop(columns=["Productivity Numeric"])
+        )
 
-    sp_summary["Productivity %"] = sp_summary["Productivity Numeric"].fillna(0).astype(int).astype(str) + " %"
-
-
-
-    # --- Bug Summary ---
-    bug_summary = bugs_filtered.groupby("Developer").size().reset_index(name="Total Bugs")
-    merged = pd.merge(sp_summary, bug_summary, on="Developer", how="outer").fillna({"Completed SP": 0, "Expected SP": count_working_days(start_date, end_date), "Total Bugs": 0})
-
-    # --- Bug Density ---
-    merged["Bug Density"] = np.where(merged["Completed SP"] == 0, np.nan, merged["Total Bugs"] / merged["Completed SP"])
-    merged["Bug Density"] = merged["Bug Density"].round(3)
-
-    # --- Quality using Fixed Scaling ---
-    merged["Quality Numeric"] = 100 - (merged["Bug Density"] * 200)
-    merged["Quality Numeric"] = merged["Quality Numeric"].where(merged["Completed SP"] > 0, 0).clip(lower=0).round()
-    merged["Quality %"] = merged["Quality Numeric"].astype(int).astype(str) + " %"
-
-    # --- Show Tables ---
-    st.subheader("✅ Productivity Summary")
-    st.dataframe(
-        merged[["Developer", "Completed SP", "Expected SP", "Productivity %", "Productivity Numeric"]]
-        .sort_values("Productivity Numeric", ascending=False)
-        .drop(columns=["Productivity Numeric"])
-    )
-
-    st.subheader("🧪 Quality Summary")
-    quality_df = merged[["Developer", "Completed SP", "Total Bugs", "Bug Density", "Quality %", "Quality Numeric"]].copy()
-    quality_df["Bug Density"] = quality_df["Bug Density"].round(1)
-    st.dataframe(quality_df.sort_values("Quality Numeric", ascending=False).drop(columns=["Quality Numeric"]))
+        st.subheader("🧪 Quality Summary")
+        quality_df = merged[["Developer", "Completed SP", "Total Bugs", "Bug Density", "Quality %", "Quality Numeric"]].copy()
+        quality_df["Bug Density"] = quality_df["Bug Density"].round(1)
+        st.dataframe(
+            quality_df.sort_values("Quality Numeric", ascending=False)
+            .drop(columns=["Quality Numeric"])
+        )
 
 # Chat history session init
 if "chat_history" not in st.session_state:
