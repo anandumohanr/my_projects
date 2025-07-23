@@ -462,13 +462,11 @@ def render_insights_tab(df, bugs_df):
 
     # --- Bug Density ---
     merged["Bug Density"] = np.where(merged["Completed SP"] == 0, np.nan, merged["Total Bugs"] / merged["Completed SP"])
+    merged["Bug Density"] = merged["Bug Density"].round(3)
 
-    # --- Normalize for Quality % ---
-    def normalize(series):
-        return (series - series.min()) / (series.max() - series.min()) if series.max() > series.min() else series
-
-    merged["Quality Numeric"] = 100 - normalize(merged["Bug Density"].fillna(merged["Bug Density"].max())) * 100
-    merged["Quality Numeric"] = merged["Quality Numeric"].where(merged["Completed SP"] > 0, np.nan).round().fillna(0)
+    # --- Quality using Fixed Scaling ---
+    merged["Quality Numeric"] = 100 - (merged["Bug Density"] * 200)
+    merged["Quality Numeric"] = merged["Quality Numeric"].where(merged["Completed SP"] > 0, 0).clip(lower=0).round()
     merged["Quality %"] = merged["Quality Numeric"].astype(int).astype(str) + " %"
 
     # --- Show Tables ---
