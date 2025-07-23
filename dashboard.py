@@ -446,41 +446,46 @@ def render_insights_tab(df, bugs_df):
         start_date = st.date_input("Start Date", value=default_start, min_value=min_date, max_value=max_date)
         end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=max_date)
 
-    # --- Filter Data ---
-    df_filtered = df[(df["Week Start"].dt.date >= start_date) & (df["Week Start"].dt.date <= end_date) & (df["Is Completed"])]
-    bugs_filtered = bugs_df[(bugs_df["Week Start"].dt.date >= start_date) & (bugs_df["Week Start"].dt.date <= end_date)]
+    with st.spinner("🔄 Generating insights... Please wait."):
+        # --- Filter Data ---
+        df_filtered = df[(df["Week Start"].dt.date >= start_date) & (df["Week Start"].dt.date <= end_date) & (df["Is Completed"])]
+        bugs_filtered = bugs_df[(bugs_df["Week Start"].dt.date >= start_date) & (bugs_df["Week Start"].dt.date <= end_date)]
 
-    # --- SP Summary ---
-    sp_summary = df_filtered.groupby("Developer")["Story Points"].sum().reset_index().rename(columns={"Story Points": "Completed SP"})
-    sp_summary["Expected SP"] = count_working_days(start_date, end_date)
-    sp_summary["Productivity Numeric"] = (sp_summary["Completed SP"] / sp_summary["Expected SP"] * 100).round().fillna(0)
-    sp_summary["Productivity %"] = sp_summary["Productivity Numeric"].astype(int).astype(str) + " %"
+        # --- SP Summary ---
+        sp_summary = df_filtered.groupby("Developer")["Story Points"].sum().reset_index().rename(columns={"Story Points": "Completed SP"})
+        sp_summary["Expected SP"] = count_working_days(start_date, end_date)
+        sp_summary["Productivity Numeric"] = (sp_summary["Completed SP"] / sp_summary["Expected SP"] * 100).round().fillna(0)
+        sp_summary["Productivity %"] = sp_summary["Productivity Numeric"].astype(int).astype(str) + " %"
 
-    # --- Bug Summary ---
-    bug_summary = bugs_filtered.groupby("Developer").size().reset_index(name="Total Bugs")
-    merged = pd.merge(sp_summary, bug_summary, on="Developer", how="outer").fillna({"Completed SP": 0, "Expected SP": count_working_days(start_date, end_date), "Total Bugs": 0})
+        # --- Bug Summary ---
+        bug_summary = bugs_filtered.groupby("Developer").size().reset_index(name="Total Bugs")
+        merged = pd.merge(sp_summary, bug_summary, on="Developer", how="outer").fillna({
+            "Completed SP": 0,
+            "Expected SP": count_working_days(start_date, end_date),
+            "Total Bugs": 0
+        })
 
-    # --- Bug Density ---
-    merged["Bug Density"] = np.where(merged["Completed SP"] == 0, np.nan, merged["Total Bugs"] / merged["Completed SP"])
-    merged["Bug Density"] = merged["Bug Density"].round(3)
+        # --- Bug Density ---
+        merged["Bug Density"] = np.where(merged["Completed SP"] == 0, np.nan, merged["Total Bugs"] / merged["Completed SP"])
+        merged["Bug Density"] = merged["Bug Density"].round(3)
 
-    # --- Quality using Fixed Scaling ---
-    merged["Quality Numeric"] = 100 - (merged["Bug Density"] * 200)
-    merged["Quality Numeric"] = merged["Quality Numeric"].where(merged["Completed SP"] > 0, 0).clip(lower=0).round()
-    merged["Quality %"] = merged["Quality Numeric"].astype(int).astype(str) + " %"
+        # --- Quality using Fixed Scaling ---
+        merged["Quality Numeric"] = 100 - (merged["Bug Density"] * 200)
+        merged["Quality Numeric"] = merged["Quality Numeric"].where(merged["Completed SP"] > 0, 0).clip(lower=0).round()
+        merged["Quality %"] = merged["Quality Numeric"].astype(int).astype(str) + " %"
 
-    # --- Show Tables ---
-    st.subheader("✅ Productivity Summary")
-    st.dataframe(
-        merged[["Developer", "Completed SP", "Expected SP", "Productivity %", "Productivity Numeric"]]
-        .sort_values("Productivity Numeric", ascending=False)
-        .drop(columns=["Productivity Numeric"])
-    )
+        # --- Show Tables ---
+        st.subheader("✅ Productivity Summary")
+        st.dataframe(
+            merged[["Developer", "Completed SP", "Expected SP", "Productivity %", "Productivity Numeric"]]
+            .sort_values("Productivity Numeric", ascending=False)
+            .drop(columns=["Productivity Numeric"])
+        )
 
-    st.subheader("🧪 Quality Summary")
-    quality_df = merged[["Developer", "Completed SP", "Total Bugs", "Bug Density", "Quality %", "Quality Numeric"]].copy()
-    quality_df["Bug Density"] = quality_df["Bug Density"].round(1)
-    st.dataframe(quality_df.sort_values("Quality Numeric", ascending=False).drop(columns=["Quality Numeric"]))
+        st.subheader("🧪 Quality Summary")
+        quality_df = merged[["Developer", "Completed SP", "Total Bugs", "Bug Density", "Quality %", "Quality Numeric"]].copy()
+        quality_df["Bug Density"] = quality_df["Bug Density"].round(1)
+        st.dataframe(quality_df.sort_values("Quality Numeric", ascending=False).drop(columns=["Quality Numeric"]))
 
 # Chat history session init
 if "chat_history" not in st.session_state:
