@@ -456,8 +456,6 @@ def render_insights_tab(df, bugs_df):
         sp_summary = pd.merge(all_devs, sp_summary, on="Developer", how="left").fillna(0)
         sp_summary["Expected SP"] = count_working_days(start_date, end_date)
         sp_summary["Productivity Numeric"] = (sp_summary["Completed SP"] / sp_summary["Expected SP"] * 100).round().fillna(0)
-        merged["Productivity Numeric"] = merged["Productivity Numeric"].fillna(0)
-        merged["Productivity %"] = merged["Productivity Numeric"].astype(int).astype(str) + " %"
 
         bug_summary = bugs_filtered.groupby("Developer").size().reset_index(name="Total Bugs")
         merged = pd.merge(sp_summary, bug_summary, on="Developer", how="outer").fillna({
@@ -466,6 +464,8 @@ def render_insights_tab(df, bugs_df):
             "Total Bugs": 0
         })
 
+        merged["Productivity Numeric"] = merged["Productivity Numeric"].fillna(0)
+        merged["Productivity %"] = merged["Productivity Numeric"].astype(int).astype(str) + " %"
         merged["Bug Density"] = np.where(merged["Completed SP"] == 0, np.nan, merged["Total Bugs"] / merged["Completed SP"]).round(3)
         merged["Quality Numeric"] = 100 - (merged["Bug Density"] * 200)
         merged["Quality Numeric"] = merged["Quality Numeric"].where(merged["Completed SP"] > 0, 0).clip(lower=0).round()
