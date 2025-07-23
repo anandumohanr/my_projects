@@ -485,20 +485,6 @@ def render_insights_tab(df, bugs_df):
     st.subheader("🐞 Defect Density & Delivery")
     st.dataframe(merged[["Developer", "Total SP", "Expected SP", "Total Bugs", "Defect Density", "Delivery %"]])
 
-    # --- Radar Charts ---
-    st.subheader("📌 KPI Radar Chart (Productivity, Quality, Delivery, Bugs)")
-    for _, row in merged.iterrows():
-        radar_df = pd.DataFrame({
-            "Metric": ["Productivity", "Quality", "Delivery", "Bugs"],
-            "Value": [row["Productivity"], row["Quality"], row["Delivery"], row["Bugs"]]
-        })
-        radar_chart = alt.Chart(radar_df).mark_area().encode(
-            theta=alt.Theta("Metric", type="nominal"),
-            radius=alt.Radius("Value", scale=alt.Scale(domain=[0, 1])),
-            tooltip=["Metric", "Value"]
-        ).properties(title=f"KPI Radar for {row['Developer']}", height=300, width=300)
-        st.altair_chart(radar_chart)
-
 # Chat history session init
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
