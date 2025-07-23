@@ -410,8 +410,11 @@ def render_insights_tab(df, bugs_df):
         start_date = datetime(prev_q_end.year, prev_q_start, 1).date()
         end_date = prev_q_end.date()
     else:
-        start_date = st.date_input("Start Date", value=default_start, min_value=min_date, max_value=max_date)
-        end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=max_date)
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input("Start Date", value=default_start, min_value=min_date, max_value=max_date)
+        with col2:
+            end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=max_date)
 
     with st.spinner("🔄 Generating insights... Please wait."):
         df_filtered = df[
