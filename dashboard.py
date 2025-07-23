@@ -15,17 +15,6 @@ from dateutil.relativedelta import relativedelta
 
 # Constants
 COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
-DEVELOPERS = [
-    "Anandu Mohan",
-    "Ravi Kumar",
-    "shree.vidya",
-    "Brijesh Kanchan",
-    "Hari Prasad H S",
-    "Fahad P K",
-    "Venukumar DL",
-    "Kishore C",
-    "padmaja"
-]
 
 @st.cache_data(ttl=14400, show_spinner=False)
 def load_jira_data():
@@ -132,6 +121,50 @@ def format_period_scope(row, period):
         return ""
     return f"{format_period_display(row, period)} ({start.strftime('%d-%b-%Y').upper()} to {end.strftime('%d-%b-%Y').upper()})"
 
+def get_week_label(week_str):
+    year, week = map(int, week_str.split('-'))
+    week_start = datetime.strptime(f'{year}-W{int(week)}-1', '%Y-W%W-%w').date()
+    week_end = week_start + timedelta(days=6)
+    return f"{week_str} ({week_start.strftime('%d-%b-%Y').upper()} to {week_end.strftime('%d-%b-%Y').upper()})"
+
+def prepare_trend_data_fixed(df, period, developer=None):
+    df = df[df["Is Completed"]].copy()
+    devs = sorted(df["Developer"].dropna().unique()) if developer is None else [developer]
+
+    if period == "Week":
+        group_col = "Week"
+        date_col = "Week Start"
+    elif period == "Month":
+        group_col = "Month"
+        date_col = "Month"
+    elif period == "Quarter":
+        group_col = "Quarter"
+        date_col = "Quarter"
+    else:
+        group_col = "Year"
+        date_col = "Year"
+
+    # Ensure all (period, developer) pairs exist
+    all_periods = sorted(df[group_col].dropna().unique())
+    index = pd.MultiIndex.from_product([all_periods, devs], names=[group_col, "Developer"])
+    trend_df = df.groupby([group_col, "Developer"])["Story Points"].sum().reindex(index, fill_value=0).reset_index()
+
+    # Add full calendar-based range labels
+    if period == "Week":
+        trend_df["Label"] = trend_df[group_col]
+        trend_df["Scope"] = trend_df[group_col].apply(get_week_label)
+    elif period == "Month":
+        trend_df["Label"] = trend_df[group_col].dt.strftime('%b-%Y').str.upper()
+        trend_df["Scope"] = trend_df[group_col].apply(lambda d: f"{d.strftime('%b-%Y').upper()} ({d.strftime('%d-%b-%Y').upper()} to {(d + pd.offsets.MonthEnd(0)).strftime('%d-%b-%Y').upper()})")
+    elif period == "Quarter":
+        trend_df["Label"] = trend_df[group_col].apply(lambda d: f"Q{((d.month-1)//3)+1}-{d.year}")
+        trend_df["Scope"] = trend_df[group_col].apply(lambda d: f"Q{((d.month-1)//3)+1}-{d.year} ({d.strftime('%d-%b-%Y').upper()} to {(d + pd.DateOffset(months=3) - pd.Timedelta(days=1)).strftime('%d-%b-%Y').upper()})")
+    else:
+        trend_df["Label"] = trend_df[group_col].astype(str)
+        trend_df["Scope"] = trend_df[group_col].apply(lambda y: f"{y} (01-JAN-{y} to 31-DEC-{y})")
+
+    return trend_df
+
 def render_summary_tab(df, selected_week):
     st.subheader("Developer Productivity Summary")
     filtered_df = df[df["Week"] == selected_week]
@@ -140,7 +173,7 @@ def render_summary_tab(df, selected_week):
 
     developer_completed = completed_df.groupby("Developer")["Story Points"].sum().astype(int).to_dict()
     developer_inprogress = in_progress_df_all.groupby("Developer")["Story Points"].sum().astype(int).to_dict()
-    all_developers = set(DEVELOPERS).union(developer_completed).union(developer_inprogress)
+    all_developers = sorted(df["Developer"].dropna().unique())
     data = []
     for dev in sorted(all_developers):
         completed = developer_completed.get(dev, 0)
@@ -222,7 +255,7 @@ def render_trend_tab(df):
     else:
         group_col = "Year"
 
-    trend_data = df_dev.groupby(group_col)["Story Points"].sum().reset_index()
+    trend_data = prepare_trend_data_fixed(df, period, developer)
 
     if trend_data.empty:
         st.info("No data available.")
@@ -246,9 +279,6 @@ def render_trend_tab(df):
             start = datetime(row, 1, 1).date()
             end = datetime(row, 12, 31).date()
             return f"{row} ({start.strftime('%d-%b-%Y').upper()} to {end.strftime('%d-%b-%Y').upper()})"
-
-    trend_data["Label"] = trend_data[group_col].apply(lambda x: x.strftime('%b-%Y').upper() if period == "Month" else (f"Q{((x.month - 1) // 3) + 1}-{x.year}" if period == "Quarter" else str(x)))
-    trend_data["Scope"] = trend_data[group_col].apply(lambda x: format_scope(x))
 
     trend_chart = alt.Chart(trend_data).mark_line(point=True).encode(
         x=alt.X("Label:N", title=period),
@@ -291,11 +321,10 @@ def render_team_trend(df):
         formatter = lambda x: f"{x} (01-JAN-{x} to 31-DEC-{x})"
         labeler = lambda x: str(x)
 
-    grouped_chart = df_team.groupby([group_col, "Developer"])["Story Points"].sum().reset_index()
-    grouped_chart["Period"] = grouped_chart[group_col].apply(labeler)
+    grouped_chart = prepare_trend_data_fixed(df, period)
+    grouped_chart["Period"] = grouped_chart["Label"]
 
-    grouped_table = df_team.groupby(group_col)["Story Points"].sum().reset_index()
-    grouped_table["Period"] = grouped_table[group_col].apply(formatter)
+    grouped_table = grouped_chart.groupby("Scope")["Story Points"].sum().reset_index().rename(columns={"Scope": "Period"})
 
     chart = alt.Chart(grouped_chart).mark_bar().encode(
         x=alt.X("Period:N", title=period),
