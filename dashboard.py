@@ -671,6 +671,8 @@ def render_tasks_tab(df, bugs_df):
         use_container_width=True
     )
 
+    st.subheader("🐞 Bugs")
+
     # --- Show Bugs Table ---
     st.dataframe(
         filtered_bugs[["Key", "Summary", "Developer", "Created"]],
