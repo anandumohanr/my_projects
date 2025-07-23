@@ -472,11 +472,12 @@ def render_insights_tab(df, bugs_df):
     st.dataframe(merged[["Developer", "Completed SP", "Expected SP", "Productivity %"]].sort_values("Productivity %", ascending=False))
 
     st.subheader("🧪 Quality Summary")
-    st.dataframe(
-        merged[["Developer", "Total Bugs", "Bug Density", "Quality %"]]
-        .replace({np.nan: "N/A"})
-        .sort_values("Quality %", ascending=False)
-    )
+    quality_df = merged[["Developer", "Total Bugs", "Bug Density", "Quality %"]].copy()
+    quality_df = quality_df.sort_values("Quality %", ascending=False)
+    quality_df["Bug Density"] = quality_df["Bug Density"].round(2)
+    quality_df["Quality %"] = quality_df["Quality %"].round(2)
+    quality_df["Quality %"] = quality_df["Quality %"].fillna("N/A")
+    st.dataframe(quality_df)
 
 # Chat history session init
 if "chat_history" not in st.session_state:
