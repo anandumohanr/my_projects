@@ -715,7 +715,7 @@ def main():
         for _, row in week_options_df.iterrows()
     }
 
-    tabs = st.tabs(["Summary", "Trends", "Team View", "Tasks", "Quality", "Insights", "AI Assistant"])
+    tabs = st.tabs(["Summary", "Trends", "Team View", "Quality", "Insights", "Tasks & Bug List", "AI Assistant"])
     with tabs[0]:
         selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
         render_summary_tab(df, selected_week)
@@ -724,11 +724,11 @@ def main():
     with tabs[2]:
         render_team_trend(df)
     with tabs[3]:
-        render_tasks_tab(df, bugs_df)
-    with tabs[4]:
         render_quality_tab(bugs_df)
-    with tabs[5]:
+    with tabs[4]:
         render_insights_tab(df, bugs_df)
+    with tabs[5]:
+        render_tasks_tab(df, bugs_df)
     with tabs[6]:
         render_ai_assistant_tab(df, bugs_df)
 
