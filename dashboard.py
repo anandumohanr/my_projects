@@ -642,9 +642,13 @@ def render_tasks_tab(df, bugs_df):
 
     global_min = min(min_due, min_created)
     global_max = max(max_due, max_created)
+    default_start = global_max - timedelta(weeks=4)
 
-    start_date = st.date_input("Start Date", value=today - timedelta(weeks=4), min_value=global_min, max_value=global_max)
-    end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=global_max)
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input("Start Date", value=default_start, min_value=global_min, max_value=global_max)
+    with col2:
+        end_date = st.date_input("End Date", value=global_max, min_value=start_date, max_value=global_max)
 
     # --- Developer Filter ---
     all_devs = sorted(set(df["Developer"].dropna().unique()) | set(bugs_df["Developer"].dropna().unique()))
