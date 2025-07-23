@@ -655,23 +655,25 @@ def render_tasks_tab(df, bugs_df):
 
     # --- Developer Filter ---
     all_devs = sorted(set(df["Developer"].dropna().unique()) | set(bugs_df["Developer"].dropna().unique()))
-    selected_devs = st.multiselect("Select Developer(s)", options=all_devs, default=all_devs)
+    selected_devs = st.multiselect("Filter by Developer (optional)", options=all_devs)
 
     # --- Filter Tasks ---
     filtered_tasks = df[
         (df["Due Date"].dt.date >= start_date) &
-        (df["Due Date"].dt.date <= end_date) &
-        (df["Developer"].isin(selected_devs))
+        (df["Due Date"].dt.date <= end_date)
     ]
+    if selected_devs:
+        filtered_tasks = filtered_tasks[filtered_tasks["Developer"].isin(selected_devs)]
 
     # --- Filter Bugs ---
     filtered_bugs = bugs_df[
         (bugs_df["Created"].dt.date >= start_date) &
-        (bugs_df["Created"].dt.date <= end_date) &
-        (bugs_df["Developer"].isin(selected_devs))
+        (bugs_df["Created"].dt.date <= end_date)
     ]
+    if selected_devs:
+        filtered_bugs = filtered_bugs[filtered_bugs["Developer"].isin(selected_devs)]
 
-    # --- Show Tasks Table ---
+    # --- Show Tables ---
     st.subheader("✅ Tasks")
     st.dataframe(
         filtered_tasks[["Key", "Summary", "Developer", "Status", "Due Date", "Story Points"]],
@@ -679,8 +681,6 @@ def render_tasks_tab(df, bugs_df):
     )
 
     st.subheader("🐞 Bugs")
-
-    # --- Show Bugs Table ---
     st.dataframe(
         filtered_bugs[["Key", "Summary", "Developer", "Created"]],
         use_container_width=True
