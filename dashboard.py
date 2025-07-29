@@ -414,7 +414,10 @@ def render_insights_tab(df, bugs_df):
         with col1:
             start_date = st.date_input("Start Date", value=default_start, min_value=min_date, max_value=max_date)
         with col2:
-            end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=max_date)
+            # Ensure valid range for end date input
+            adjusted_today = min(today, max_date)
+            adjusted_start = min(start_date, max_date)
+            end_date = st.date_input("End Date", value=adjusted_today, min_value=adjusted_start, max_value=max_date)
 
     with st.spinner("🔄 Generating insights... Please wait."):
         df_filtered = df[
@@ -649,9 +652,12 @@ def render_tasks_tab(df, bugs_df):
 
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Start Date", value=default_start, min_value=global_min, max_value=global_max)
+        start_date = st.date_input("Start Date", value=default_start, min_value=min_date, max_value=max_date)
     with col2:
-        end_date = st.date_input("End Date", value=global_max, min_value=start_date, max_value=global_max)
+        # Ensure valid range for end date input
+        adjusted_today = min(today, max_date)
+        adjusted_start = min(start_date, max_date)
+        end_date = st.date_input("End Date", value=adjusted_today, min_value=adjusted_start, max_value=max_date)
 
     # --- Developer Filter ---
     all_devs = sorted(set(df["Developer"].dropna().unique()) | set(bugs_df["Developer"].dropna().unique()))
