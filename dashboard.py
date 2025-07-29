@@ -652,12 +652,12 @@ def render_tasks_tab(df, bugs_df):
 
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Start Date", value=default_start, min_value=min_date, max_value=max_date)
+        start_date = st.date_input("Start Date", value=default_start, min_value=global_min, max_value=global_max)
     with col2:
         # Ensure valid range for end date input
-        adjusted_today = min(today, max_date)
-        adjusted_start = min(start_date, max_date)
-        end_date = st.date_input("End Date", value=adjusted_today, min_value=adjusted_start, max_value=max_date)
+        adjusted_today = min(today, global_max)
+        adjusted_start = min(start_date, global_max)
+        end_date = st.date_input("End Date", value=adjusted_today, min_value=adjusted_start, max_value=global_max)
 
     # --- Developer Filter ---
     all_devs = sorted(set(df["Developer"].dropna().unique()) | set(bugs_df["Developer"].dropna().unique()))
