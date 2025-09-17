@@ -23,40 +23,107 @@ def load_jira_data():
     auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
     headers = {"Accept": "application/json"}
     jql = f"filter={st.secrets['JIRA_FILTER_ID']}"
-    params = {"jql": jql, "fields": "key,summary,status,customfield_11020,customfield_10010,customfield_11012", "maxResults": 1000}
 
+    start_at = 0
+    max_results = 100   # page size
+    all_issues = []
     try:
-        response = requests.get(url, headers=headers, auth=auth, params=params)
-        payload = response.json()
-        # TEMP DEBUG: print page info and keys to Streamlit UI and terminal
-        page_keys = [iss.get("key") for iss in payload.get("issues", [])]
-        st.write(f"[JIRA RAW] page startAt={payload.get('startAt')} maxResults={payload.get('maxResults')} page_count={len(page_keys)} total={payload.get('total')}")
-        st.write(page_keys[:200])  # show up to 200 keys on this page
-        response.raise_for_status()
-        issues = response.json()["issues"]
+        while True:
+            params = {
+                "jql": jql,
+                "fields": "key,summary,status,customfield_11020,customfield_10010,customfield_11012,created",
+                "startAt": start_at,
+                "maxResults": max_results
+            }
+            response = requests.get(url, headers=headers, auth=auth, params=params)
+            response.raise_for_status()
+            payload = response.json()
+
+            issues = payload.get("issues", []) or []
+            page_keys = [iss.get("key") for iss in issues]
+            # Print page info to Streamlit UI for debugging
+            st.write(f"[JIRA RAW] page startAt={payload.get('startAt')} page_count={len(page_keys)} total={payload.get('total')}")
+            st.write(page_keys[:500])
+
+            all_issues.extend(issues)
+
+            # increment start_at by number of issues returned (safer than payload.maxResults)
+            if len(issues) == 0:
+                break
+            start_at += len(issues)
+
+            # stop when we've reached the total
+            total = payload.get("total", 0)
+            if start_at >= total:
+                break
+
+        # After paging, show collected summary
+        collected_keys = [iss.get("key") for iss in all_issues]
+        st.write(f"[JIRA RAW] collected total keys: {len(collected_keys)} (expected total: {total})")
+        st.write(collected_keys[:500])
+
+        # OPTIONAL: quickly check for specific keys you know are missing
+        expected_missing = ["MDLRN-25338", "MDLRN-25360"]  # replace with your missing keys
+        still_missing = [k for k in expected_missing if k not in collected_keys]
+        if still_missing:
+            st.error(f"Expected keys still not in collected pages: {still_missing}")
+        else:
+            st.success("All expected keys found in the collected pages.")
+
+        # build DataFrame rows
         data = []
-        for issue in issues:
-            fields = issue["fields"]
+        for issue in all_issues:
+            fields = issue.get("fields", {}) or {}
+            dev_field = fields.get("customfield_11012")
+            # robust developer extraction
+            developer = ""
+            if isinstance(dev_field, dict):
+                developer = dev_field.get("displayName") or dev_field.get("name") or dev_field.get("accountId") or ""
+            elif isinstance(dev_field, list) and len(dev_field) > 0:
+                developer = ", ".join([d.get("displayName","") if isinstance(d, dict) else str(d) for d in dev_field])
+            elif dev_field is not None:
+                developer = str(dev_field)
+
             data.append({
-                "Key": issue["key"],
-                "Summary": fields.get("summary", ""),
-                "Status": fields.get("status", {}).get("name", ""),
+                "Key": issue.get("key"),
+                "Summary": fields.get("summary", "") or "",
+                "Status": (fields.get("status") or {}).get("name", "") or "",
                 "Due Date": fields.get("customfield_11020"),
                 "Story Points": fields.get("customfield_10010", 0),
-                "Developer": fields.get("customfield_11012", {}).get("displayName", "")
+                "Developer": developer
             })
 
         df = pd.DataFrame(data)
-        df["Due Date"] = pd.to_datetime(df["Due Date"])
-        df["Story Points"] = pd.to_numeric(df["Story Points"]).fillna(0)
-        df["Status"] = df["Status"].fillna("")
-        df["Week"] = df["Due Date"].dt.strftime("%Y-%W")
+
+        # normalize strings
+        import unicodedata, re
+        def normalize_str(v):
+            if pd.isna(v):
+                return ""
+            s = str(v)
+            s = unicodedata.normalize("NFKC", s)
+            s = re.sub(r'\s+', ' ', s).strip()
+            return s
+
+        for col in ["Key", "Summary", "Status", "Developer"]:
+            if col in df.columns:
+                df[col] = df[col].apply(normalize_str)
+
+        # coerce types
+        df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
+        df["Story Points"] = pd.to_numeric(df["Story Points"], errors="coerce").fillna(0)
+
+        iso = df["Due Date"].dt.isocalendar()
+        # handle possible NaT gracefully
+        df["Week"] = iso["year"].astype('Int64').astype(str) + "-" + iso["week"].astype('Int64').apply(lambda x: f"{int(x):02d}" if pd.notna(x) else None)
         df["Week Start"] = df["Due Date"].dt.to_period("W").dt.start_time
         df["Month"] = df["Due Date"].dt.to_period("M").dt.to_timestamp()
         df["Quarter"] = df["Due Date"].dt.to_period("Q").dt.to_timestamp()
         df["Year"] = df["Due Date"].dt.year
-        df["Is Completed"] = df["Status"].str.upper().isin(COMPLETED_STATUSES)
+        df["Is Completed"] = df["Status"].str.upper().isin([s.upper() for s in COMPLETED_STATUSES])
+        df["Developer"] = df["Developer"].replace("", "(Unassigned)")
         return df
+
     except Exception as e:
         st.error(f"Failed to fetch JIRA data: {e}")
         return pd.DataFrame()
