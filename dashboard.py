@@ -740,6 +740,76 @@ def main():
         render_quality_tab(bugs_df)
     with tabs[4]:
         render_insights_tab(df, bugs_df)
+        # ----------------- DROP-IN DEBUG BLOCK -----------------
+        st.markdown("### Debug: why tickets are not showing")
+        
+        # Replace with the exact JIRA keys you expect to see
+        missing_keys = ["MDLRN-25338", "MDLRN-25360"]  # <-- set your two missing keys here
+        
+        # Ensure parsing done similar to loader
+        df["_DueDate_parsed"] = pd.to_datetime(df["Due Date"], errors="coerce")
+        df["_DueDate_date"] = df["_DueDate_parsed"].dt.date
+        
+        st.write("Total issues in df:", len(df))
+        st.write("Distinct Keys in df:", df["Key"].nunique())
+        
+        # 1) Are the missing keys present at all?
+        found_rows = df[df["Key"].isin(missing_keys)].copy()
+        st.write("Found missing keys in df:", len(found_rows))
+        if found_rows.empty:
+            st.error("None of the expected keys are present in df. (Loader/JQL issue or rows dropped)")
+        else:
+            st.dataframe(found_rows[["Key","Summary","Developer","Status","Due Date","_DueDate_parsed","_DueDate_date","Story Points","Week","Week Start","Is Completed"]])
+        
+        # 2) Re-run the exact filters used by render_tasks_tab() and show which stage removes them:
+        # replicate UI date range used in your screenshot/test: set explicit start/end (you said Jul1 - Sep17)
+        from datetime import date
+        ui_start = date(2025,7,1)
+        ui_end = date(2025,9,17)
+        
+        st.write(f"Simulating Tasks tab filters with date range: {ui_start} to {ui_end}")
+        
+        for key in missing_keys:
+            st.markdown(f"---\n**Checking {key}**")
+            row = df[df["Key"] == key]
+            if row.empty:
+                st.write(" -> Not present in df at all.")
+                continue
+            row = row.iloc[0]
+        
+            # raw stored values
+            st.write("Developer (repr):", repr(row["Developer"]))
+            st.write("Status (repr):", repr(row["Status"]))
+            st.write("Due Date raw:", row["Due Date"])
+            st.write("Due Date parsed:", row["_DueDate_parsed"])
+            st.write("Due Date as date:", row["_DueDate_date"])
+            st.write("Is Completed stored:", row.get("Is Completed", "<no column>"))
+        
+            # 2.1 date filter
+            in_date = False
+            if pd.notna(row["_DueDate_date"]):
+                in_date = (row["_DueDate_date"] >= ui_start) and (row["_DueDate_date"] <= ui_end)
+            st.write("Passes date filter (ui range):", in_date)
+        
+            # 2.2 developer filter (simulate multiselect with exactly your name)
+            selected_devs = ["Anandu Mohan"]  # simulate the selected value(s)
+            # membership checks (exact, stripped, case-insensitive, contains)
+            dev_val = "" if pd.isna(row["Developer"]) else str(row["Developer"])
+            st.write("Exact membership:", dev_val in selected_devs)
+            st.write("Trimmed membership:", dev_val.strip() in selected_devs)
+            st.write("Lower-case membership:", dev_val.lower() in [d.lower() for d in selected_devs])
+            st.write("Case-insensitive CONTAINS:", selected_devs[0].lower() in dev_val.lower())
+        
+            # 2.3 status/is_completed: does tasks tab depend on Is Completed? (no) but Insights/Summary do:
+            # show whether Is Completed and whether Status looks Closed
+            looks_closed = str(row["Status"]).strip().upper() in ["CLOSED","ACCEPTED IN QA"]
+            st.write("Status looks_closed (by string):", looks_closed)
+        
+        # 3) If any of the keys are absent, print top 200 raw keys from the last API response
+        # (Temporarily only: modify load_jira_data to return raw_keys or print in loader)
+        st.markdown("**If keys are missing in df**: add a temporary print inside load_jira_data() to inspect `response.json()['issues']` keys for the page(s).")
+        # ----------------- END DEBUG BLOCK -----------------
+
     with tabs[5]:
         render_tasks_tab(df, bugs_df)
     with tabs[6]:
