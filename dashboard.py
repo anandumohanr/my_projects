@@ -25,7 +25,7 @@ def load_jira_data():
     jql = f"filter={st.secrets['JIRA_FILTER_ID']}"
 
     start_at = 0
-    max_results = 100   # page size
+    max_results = 100
     all_issues = []
     try:
         while True:
@@ -40,37 +40,21 @@ def load_jira_data():
             payload = response.json()
 
             issues = payload.get("issues", []) or []
-            page_keys = [iss.get("key") for iss in issues]
-
             all_issues.extend(issues)
 
-            # increment start_at by number of issues returned (safer than payload.maxResults)
+            # increment by actual returned count (robust)
             if len(issues) == 0:
                 break
             start_at += len(issues)
-
-            # stop when we've reached the total
             total = payload.get("total", 0)
             if start_at >= total:
                 break
 
-        # After paging, show collected summary
-        collected_keys = [iss.get("key") for iss in all_issues]
-
-        # OPTIONAL: quickly check for specific keys you know are missing
-        expected_missing = ["MDLRN-25338", "MDLRN-25360"]  # replace with your missing keys
-        still_missing = [k for k in expected_missing if k not in collected_keys]
-        if still_missing:
-            st.error(f"Expected keys still not in collected pages: {still_missing}")
-        else:
-            st.success("All expected keys found in the collected pages.")
-
-        # build DataFrame rows
+        # build DataFrame
         data = []
         for issue in all_issues:
             fields = issue.get("fields", {}) or {}
             dev_field = fields.get("customfield_11012")
-            # robust developer extraction
             developer = ""
             if isinstance(dev_field, dict):
                 developer = dev_field.get("displayName") or dev_field.get("name") or dev_field.get("accountId") or ""
@@ -104,12 +88,10 @@ def load_jira_data():
             if col in df.columns:
                 df[col] = df[col].apply(normalize_str)
 
-        # coerce types
+        # types and periods
         df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
         df["Story Points"] = pd.to_numeric(df["Story Points"], errors="coerce").fillna(0)
-
         iso = df["Due Date"].dt.isocalendar()
-        # handle possible NaT gracefully
         df["Week"] = iso["year"].astype('Int64').astype(str) + "-" + iso["week"].astype('Int64').apply(lambda x: f"{int(x):02d}" if pd.notna(x) else None)
         df["Week Start"] = df["Due Date"].dt.to_period("W").dt.start_time
         df["Month"] = df["Due Date"].dt.to_period("M").dt.to_timestamp()
@@ -117,6 +99,7 @@ def load_jira_data():
         df["Year"] = df["Due Date"].dt.year
         df["Is Completed"] = df["Status"].str.upper().isin([s.upper() for s in COMPLETED_STATUSES])
         df["Developer"] = df["Developer"].replace("", "(Unassigned)")
+
         return df
 
     except Exception as e:
