@@ -27,6 +27,11 @@ def load_jira_data():
 
     try:
         response = requests.get(url, headers=headers, auth=auth, params=params)
+        payload = response.json()
+        # TEMP DEBUG: print page info and keys to Streamlit UI and terminal
+        page_keys = [iss.get("key") for iss in payload.get("issues", [])]
+        st.write(f"[JIRA RAW] page startAt={payload.get('startAt')} maxResults={payload.get('maxResults')} page_count={len(page_keys)} total={payload.get('total')}")
+        st.write(page_keys[:200])  # show up to 200 keys on this page
         response.raise_for_status()
         issues = response.json()["issues"]
         data = []
