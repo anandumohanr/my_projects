@@ -19,7 +19,7 @@ COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
 @st.cache_data(ttl=14400, show_spinner=False)
 def load_jira_data():
     jira_domain = st.secrets["JIRA_DOMAIN"]
-    url = f"https://{jira_domain}/rest/api/3/search"
+    url = f"https://{jira_domain}/rest/api/3/search/jql"
     auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
     headers = {"Accept": "application/json"}
     jql = f"filter={st.secrets['JIRA_FILTER_ID']}"
@@ -109,7 +109,7 @@ def load_jira_data():
 @st.cache_data(ttl=14400, show_spinner=False)
 def load_bug_data():
     jira_domain = st.secrets["JIRA_DOMAIN"]
-    url = f"https://{jira_domain}/rest/api/3/search"
+    url = f"https://{jira_domain}/rest/api/3/search/jql"
     auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
     headers = {"Accept": "application/json"}
     jql = f"filter=18484"
