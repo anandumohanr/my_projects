@@ -25,7 +25,7 @@ def load_jira_data():
     jql = f"filter={st.secrets['JIRA_FILTER_ID']}"
 
     start_at = 0
-    max_results = 100
+    max_results = 1000
     all_issues = []
     try:
         while True:
