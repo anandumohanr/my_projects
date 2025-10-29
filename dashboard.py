@@ -17,49 +17,91 @@ from dateutil.relativedelta import relativedelta
 COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
 
 @st.cache_data(ttl=14400, show_spinner=False)
+def _jira_search_all(jira_domain: str, email: str, token: str, jql: str, fields: str):
+    url = f"https://{jira_domain}/rest/api/3/search/jql"
+    auth = HTTPBasicAuth(email, token)
+    headers = {"Accept": "application/json"}
+
+    all_issues, seen_ids, seen_tokens = [], set(), set()
+    page_token, page_num = None, 0
+    MAX_PAGES = 200
+
+    while True:
+        page_num += 1
+        if page_num > MAX_PAGES:
+            # Safety cap to avoid runaway loops
+            break
+
+        params = {
+            "jql": jql,
+            "fields": fields,
+            "maxResults": 100,               # Jira Cloud hard caps at 100
+        }
+        # Support both param names; some tenants require one or the other
+        if page_token:
+            params["nextPageToken"] = page_token
+            params["pageToken"] = page_token
+
+        resp = requests.get(url, headers=headers, auth=auth, params=params)
+        resp.raise_for_status()
+        payload = resp.json()
+
+        issues = payload.get("issues", []) or []
+        # Dedup by id
+        added = 0
+        for it in issues:
+            iid = str(it.get("id") or "")
+            if iid and iid not in seen_ids:
+                seen_ids.add(iid)
+                all_issues.append(it)
+                added += 1
+
+        next_token = payload.get("nextPageToken")
+        is_last = bool(payload.get("isLast", False))
+
+        # Hard stop conditions (any one is enough)
+        if added == 0:
+            break
+        if not next_token:
+            break
+        if next_token in seen_tokens:
+            break
+        if is_last:
+            # Some tenants set isLast correctly — honor it
+            break
+
+        seen_tokens.add(next_token)
+        page_token = next_token
+
+    return all_issues
+
+@st.cache_data(ttl=14400, show_spinner=False)
 def load_jira_data():
     jira_domain = st.secrets["JIRA_DOMAIN"]
-    url = f"https://{jira_domain}/rest/api/3/search/jql"
-    auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
-    headers = {"Accept": "application/json"}
+    email = st.secrets["JIRA_EMAIL"]
+    token = st.secrets["JIRA_API_TOKEN"]
     jql = f"filter={st.secrets['JIRA_FILTER_ID']}"
 
-    start_at = 0
-    max_results = 1000
-    all_issues = []
+    fields = (
+        "key,summary,status,customfield_11020,customfield_10010,customfield_11012,created"
+    )
     try:
-        while True:
-            params = {
-                "jql": jql,
-                "fields": "key,summary,status,customfield_11020,customfield_10010,customfield_11012,created",
-                "startAt": start_at,
-                "maxResults": max_results
-            }
-            response = requests.get(url, headers=headers, auth=auth, params=params)
-            response.raise_for_status()
-            payload = response.json()
+        all_issues = _jira_search_all(jira_domain, email, token, jql, fields)
 
-            issues = payload.get("issues", []) or []
-            all_issues.extend(issues)
-
-            # increment by actual returned count (robust)
-            if len(issues) == 0:
-                break
-            start_at += len(issues)
-            total = payload.get("total", 0)
-            if start_at >= total:
-                break
-
-        # build DataFrame
+        # ---- Build DataFrame
         data = []
         for issue in all_issues:
             fields = issue.get("fields", {}) or {}
+
+            # Developer normalization (supports user object, list, or string)
             dev_field = fields.get("customfield_11012")
             developer = ""
             if isinstance(dev_field, dict):
                 developer = dev_field.get("displayName") or dev_field.get("name") or dev_field.get("accountId") or ""
             elif isinstance(dev_field, list) and len(dev_field) > 0:
-                developer = ", ".join([d.get("displayName","") if isinstance(d, dict) else str(d) for d in dev_field])
+                developer = ", ".join(
+                    [d.get("displayName", "") if isinstance(d, dict) else str(d) for d in dev_field]
+                )
             elif dev_field is not None:
                 developer = str(dev_field)
 
@@ -69,35 +111,41 @@ def load_jira_data():
                 "Status": (fields.get("status") or {}).get("name", "") or "",
                 "Due Date": fields.get("customfield_11020"),
                 "Story Points": fields.get("customfield_10010", 0),
-                "Developer": developer
+                "Developer": developer,
+                "Created": fields.get("created"),
             })
 
         df = pd.DataFrame(data)
 
-        # normalize strings
+        # ---- Normalize strings
         import unicodedata, re
         def normalize_str(v):
-            if pd.isna(v):
-                return ""
-            s = str(v)
-            s = unicodedata.normalize("NFKC", s)
-            s = re.sub(r'\s+', ' ', s).strip()
-            return s
+            if pd.isna(v): return ""
+            s = unicodedata.normalize("NFKC", str(v))
+            return re.sub(r"\s+", " ", s).strip()
 
         for col in ["Key", "Summary", "Status", "Developer"]:
             if col in df.columns:
                 df[col] = df[col].apply(normalize_str)
 
-        # types and periods
+        # ---- Types & derived periods (based on Due Date, per your rule)
         df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
+        df["Created"] = pd.to_datetime(df.get("Created"), errors="coerce")
         df["Story Points"] = pd.to_numeric(df["Story Points"], errors="coerce").fillna(0)
+
         iso = df["Due Date"].dt.isocalendar()
-        df["Week"] = iso["year"].astype('Int64').astype(str) + "-" + iso["week"].astype('Int64').apply(lambda x: f"{int(x):02d}" if pd.notna(x) else None)
+        df["Week"] = iso["year"].astype('Int64').astype(str) + "-" + iso["week"].astype('Int64').apply(
+            lambda x: f"{int(x):02d}" if pd.notna(x) else None
+        )
         df["Week Start"] = df["Due Date"].dt.to_period("W").dt.start_time
         df["Month"] = df["Due Date"].dt.to_period("M").dt.to_timestamp()
         df["Quarter"] = df["Due Date"].dt.to_period("Q").dt.to_timestamp()
         df["Year"] = df["Due Date"].dt.year
+
+        # ---- Completed logic (based on Status only, per your rule)
         df["Is Completed"] = df["Status"].str.upper().isin([s.upper() for s in COMPLETED_STATUSES])
+
+        # ---- Developer fallback
         df["Developer"] = df["Developer"].replace("", "(Unassigned)")
 
         return df
@@ -109,33 +157,46 @@ def load_jira_data():
 @st.cache_data(ttl=14400, show_spinner=False)
 def load_bug_data():
     jira_domain = st.secrets["JIRA_DOMAIN"]
-    url = f"https://{jira_domain}/rest/api/3/search/jql"
-    auth = HTTPBasicAuth(st.secrets["JIRA_EMAIL"], st.secrets["JIRA_API_TOKEN"])
-    headers = {"Accept": "application/json"}
-    jql = f"filter=18484"
-    params = {"jql": jql, "fields": "key,summary,created,customfield_11012", "maxResults": 1000}
+    email = st.secrets["JIRA_EMAIL"]
+    token = st.secrets["JIRA_API_TOKEN"]
+
+    # Use your filter id for bugs
+    jql = "filter=18484"
+    fields = "key,summary,created,customfield_11012"
 
     try:
-        response = requests.get(url, headers=headers, auth=auth, params=params)
-        response.raise_for_status()
-        issues = response.json()["issues"]
-        data = []
-        for issue in issues:
-            fields = issue["fields"]
-            data.append({
-                "Key": issue["key"],
-                "Summary": fields.get("summary", ""),
-                "Created": fields.get("created"),
-                "Developer": fields.get("customfield_11012", {}).get("displayName", "")
+        all_issues = _jira_search_all(jira_domain, email, token, jql, fields)
+
+        rows = []
+        for issue in all_issues:
+            f = issue.get("fields", {}) or {}
+            dev = f.get("customfield_11012")
+            if isinstance(dev, dict):
+                developer = dev.get("displayName", "") or dev.get("name", "") or dev.get("accountId", "")
+            else:
+                developer = str(dev) if dev is not None else ""
+
+            rows.append({
+                "Key": issue.get("key"),
+                "Summary": f.get("summary", "") or "",
+                "Created": f.get("created"),
+                "Developer": developer,
             })
-        df = pd.DataFrame(data)
-        df["Created"] = pd.to_datetime(df["Created"])
-        df["Week"] = df["Created"].dt.strftime("%Y-%W")
+
+        df = pd.DataFrame(rows)
+        df["Created"] = pd.to_datetime(df["Created"], errors="coerce")
+
+        iso = df["Created"].dt.isocalendar()
+        df["Week"] = iso["year"].astype('Int64').astype(str) + "-" + iso["week"].astype('Int64').apply(
+            lambda x: f"{int(x):02d}" if pd.notna(x) else None
+        )
         df["Week Start"] = df["Created"].dt.to_period("W").dt.start_time
         df["Month"] = df["Created"].dt.to_period("M").dt.to_timestamp()
         df["Quarter"] = df["Created"].dt.to_period("Q").dt.to_timestamp()
         df["Year"] = df["Created"].dt.year
+
         return df
+
     except Exception as e:
         st.error(f"Failed to fetch Bug data: {e}")
         return pd.DataFrame()
