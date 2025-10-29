@@ -15,28 +15,10 @@ import numpy as np
 # =====================
 COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
 
-# ---------------------
-# Resilient Jira Fetch
-# ---------------------
-@st.cache_data(ttl=14400, show_spinner=False)
-def _get_with_retry(url, headers, _auth, params, retries: int = 3, backoff: float = 1.5):
-    for attempt in range(1, retries + 1):
-        try:
-            resp = requests.get(url, headers=headers, auth=_auth, params=params, timeout=30)
-            resp.raise_for_status()
-            return resp
-        except Exception:
-            if attempt == retries:
-                raise
-            time.sleep(backoff ** attempt)
-
 @st.cache_data(ttl=14400, show_spinner=False)
 def _jira_search_all(jira_domain: str, email: str, token: str, jql: str, fields: str):
-    """Fetch ALL Jira issues using /rest/api/3/search/jql (cursor-based).
-    Safety: dedup by id, stop on repeated/absent token, zero-new page, MAX_PAGES cap.
-    """
     url = f"https://{jira_domain}/rest/api/3/search/jql"
-    _auth = HTTPBasicAuth(email, token)
+    auth = HTTPBasicAuth(email, token)
     headers = {"Accept": "application/json"}
 
     all_issues, seen_ids, seen_tokens = [], set(), set()
@@ -46,22 +28,25 @@ def _jira_search_all(jira_domain: str, email: str, token: str, jql: str, fields:
     while True:
         page_num += 1
         if page_num > MAX_PAGES:
+            # Safety cap to avoid runaway loops
             break
 
         params = {
             "jql": jql,
             "fields": fields,
-            "maxResults": 100,
+            "maxResults": 100,               # Jira Cloud hard caps at 100
         }
+        # Support both param names; some tenants require one or the other
         if page_token:
-            # support both param names for safety
             params["nextPageToken"] = page_token
             params["pageToken"] = page_token
 
-        resp = _get_with_retry(url, headers, _auth, params)
+        resp = requests.get(url, headers=headers, auth=auth, params=params)
+        resp.raise_for_status()
         payload = resp.json()
 
         issues = payload.get("issues", []) or []
+        # Dedup by id
         added = 0
         for it in issues:
             iid = str(it.get("id") or "")
@@ -73,7 +58,7 @@ def _jira_search_all(jira_domain: str, email: str, token: str, jql: str, fields:
         next_token = payload.get("nextPageToken")
         is_last = bool(payload.get("isLast", False))
 
-        # stopping rules
+        # Hard stop conditions (any one is enough)
         if added == 0:
             break
         if not next_token:
@@ -81,6 +66,7 @@ def _jira_search_all(jira_domain: str, email: str, token: str, jql: str, fields:
         if next_token in seen_tokens:
             break
         if is_last:
+            # Some tenants set isLast correctly — honor it
             break
 
         seen_tokens.add(next_token)
@@ -88,9 +74,6 @@ def _jira_search_all(jira_domain: str, email: str, token: str, jql: str, fields:
 
     return all_issues
 
-# ---------------------
-# Data Loaders
-# ---------------------
 @st.cache_data(ttl=14400, show_spinner=False)
 def load_jira_data():
     jira_domain = st.secrets["JIRA_DOMAIN"]
@@ -104,67 +87,66 @@ def load_jira_data():
     try:
         all_issues = _jira_search_all(jira_domain, email, token, jql, fields)
 
-        # Build DataFrame
+        # ---- Build DataFrame
         data = []
         for issue in all_issues:
-            f = issue.get("fields", {}) or {}
-            dev_field = f.get("customfield_11012")
+            fields = issue.get("fields", {}) or {}
+
+            # Developer normalization (supports user object, list, or string)
+            dev_field = fields.get("customfield_11012")
             developer = ""
             if isinstance(dev_field, dict):
                 developer = dev_field.get("displayName") or dev_field.get("name") or dev_field.get("accountId") or ""
             elif isinstance(dev_field, list) and len(dev_field) > 0:
-                out = []
-                for d in dev_field:
-                    if isinstance(d, dict):
-                        out.append(d.get("displayName", "") or d.get("name", "") or d.get("accountId", ""))
-                    else:
-                        out.append(str(d))
-                developer = ", ".join([s for s in out if s])
+                developer = ", ".join(
+                    [d.get("displayName", "") if isinstance(d, dict) else str(d) for d in dev_field]
+                )
             elif dev_field is not None:
                 developer = str(dev_field)
 
             data.append({
                 "Key": issue.get("key"),
-                "Summary": f.get("summary", "") or "",
-                "Status": (f.get("status") or {}).get("name", "") or "",
-                "Due Date": f.get("customfield_11020"),
-                "Story Points": f.get("customfield_10010", 0),
+                "Summary": fields.get("summary", "") or "",
+                "Status": (fields.get("status") or {}).get("name", "") or "",
+                "Due Date": fields.get("customfield_11020"),
+                "Story Points": fields.get("customfield_10010", 0),
                 "Developer": developer,
-                "Created": f.get("created"),
+                "Created": fields.get("created"),
             })
 
         df = pd.DataFrame(data)
 
-        # Normalize strings
-        import unicodedata
-        def _norm(v):
-            if pd.isna(v):
-                return ""
+        # ---- Normalize strings
+        import unicodedata, re
+        def normalize_str(v):
+            if pd.isna(v): return ""
             s = unicodedata.normalize("NFKC", str(v))
             return re.sub(r"\s+", " ", s).strip()
+
         for col in ["Key", "Summary", "Status", "Developer"]:
             if col in df.columns:
-                df[col] = df[col].apply(_norm)
+                df[col] = df[col].apply(normalize_str)
 
-        # Types & derived periods (based on Due Date)
+        # ---- Types & derived periods (based on Due Date, per your rule)
         df["Due Date"] = pd.to_datetime(df["Due Date"], errors="coerce")
         df["Created"] = pd.to_datetime(df.get("Created"), errors="coerce")
         df["Story Points"] = pd.to_numeric(df["Story Points"], errors="coerce").fillna(0)
 
-        # Drop rows with NaT Due Date since logic is Due-Date-based
-        df = df[~df["Due Date"].isna()].copy()
-
         iso = df["Due Date"].dt.isocalendar()
-        df["Week"] = iso["year"].astype('Int64').astype(str) + "-" + iso["week"].astype('Int64').apply(lambda x: f"{int(x):02d}" if pd.notna(x) else None)
-        # Use Monday-anchored week starts consistently
-        df["Week Start"] = df["Due Date"].dt.to_period("W-MON").dt.start_time
+        df["Week"] = iso["year"].astype('Int64').astype(str) + "-" + iso["week"].astype('Int64').apply(
+            lambda x: f"{int(x):02d}" if pd.notna(x) else None
+        )
+        df["Week Start"] = df["Due Date"].dt.to_period("W").dt.start_time
         df["Month"] = df["Due Date"].dt.to_period("M").dt.to_timestamp()
         df["Quarter"] = df["Due Date"].dt.to_period("Q").dt.to_timestamp()
         df["Year"] = df["Due Date"].dt.year
 
-        # Completed by Status only
+        # ---- Completed logic (based on Status only, per your rule)
         df["Is Completed"] = df["Status"].str.upper().isin([s.upper() for s in COMPLETED_STATUSES])
+
+        # ---- Developer fallback
         df["Developer"] = df["Developer"].replace("", "(Unassigned)")
+
         return df
 
     except Exception as e:
@@ -177,44 +159,47 @@ def load_bug_data():
     email = st.secrets["JIRA_EMAIL"]
     token = st.secrets["JIRA_API_TOKEN"]
 
+    # Use your filter id for bugs
     jql = "filter=18484"
     fields = "key,summary,created,customfield_11012"
 
     try:
         all_issues = _jira_search_all(jira_domain, email, token, jql, fields)
-        def _norm_dev(dev):
-            if isinstance(dev, dict):
-                return dev.get("displayName") or dev.get("name") or dev.get("accountId") or ""
-            if isinstance(dev, list):
-                return ", ".join([_norm_dev(d) for d in dev])
-            return "" if dev is None else str(dev)
 
         rows = []
         for issue in all_issues:
             f = issue.get("fields", {}) or {}
+            dev = f.get("customfield_11012")
+            if isinstance(dev, dict):
+                developer = dev.get("displayName", "") or dev.get("name", "") or dev.get("accountId", "")
+            else:
+                developer = str(dev) if dev is not None else ""
+
             rows.append({
                 "Key": issue.get("key"),
                 "Summary": f.get("summary", "") or "",
                 "Created": f.get("created"),
-                "Developer": _norm_dev(f.get("customfield_11012")),
+                "Developer": developer,
             })
 
         df = pd.DataFrame(rows)
         df["Created"] = pd.to_datetime(df["Created"], errors="coerce")
-        df["Developer"] = df["Developer"].fillna("").str.replace(r"\s+", " ", regex=True).str.strip()
 
         iso = df["Created"].dt.isocalendar()
-        df["Week"] = iso["year"].astype('Int64').astype(str) + "-" + iso["week"].astype('Int64').apply(lambda x: f"{int(x):02d}" if pd.notna(x) else None)
-        df["Week Start"] = df["Created"].dt.to_period("W-MON").dt.start_time
+        df["Week"] = iso["year"].astype('Int64').astype(str) + "-" + iso["week"].astype('Int64').apply(
+            lambda x: f"{int(x):02d}" if pd.notna(x) else None
+        )
+        df["Week Start"] = df["Created"].dt.to_period("W").dt.start_time
         df["Month"] = df["Created"].dt.to_period("M").dt.to_timestamp()
         df["Quarter"] = df["Created"].dt.to_period("Q").dt.to_timestamp()
         df["Year"] = df["Created"].dt.year
+
         return df
 
     except Exception as e:
         st.error(f"Failed to fetch Bug data: {e}")
         return pd.DataFrame()
-
+    
 # ---------------------
 # Utility formatting
 # ---------------------
