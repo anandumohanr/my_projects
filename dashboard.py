@@ -360,6 +360,17 @@ def render_trend_tab(df):
 def render_team_trend(df):
     st.subheader("👥 Team Trend")
     period = st.selectbox("Team View By", ["Week", "Month", "Quarter", "Year"], key="team_period")
+
+    # Map selected period to the actual column name used in grouped_chart
+    if period == "Week":
+        group_col = "Week"
+    elif period == "Month":
+        group_col = "Month"
+    elif period == "Quarter":
+        group_col = "Quarter"
+    else:
+        group_col = "Year"
+
     df_team = df[df["Is Completed"]]
     if df_team.empty:
         st.info("No story point data available.")
