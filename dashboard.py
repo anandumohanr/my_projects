@@ -368,7 +368,22 @@ def render_team_trend(df):
     grouped_chart = prepare_trend_data_fixed(df, period)
     grouped_chart["Period"] = grouped_chart["Label"]
 
-    grouped_table = grouped_chart.groupby("Scope")["Story Points"].sum().reset_index().rename(columns={"Scope": "Period"})
+    # Build order from the true period column (not the string label)
+    order_map = (
+        grouped_chart[[group_col, "Scope"]]
+        .drop_duplicates()
+        .sort_values(group_col)        # chronological by Month/Quarter/Year/Week
+        .reset_index(drop=True)
+    )
+    order_map["_ord"] = range(len(order_map))
+
+    # Apply order to the table so it matches the chart
+    grouped_table = (
+        grouped_chart.groupby("Scope")["Story Points"].sum().reset_index()
+        .rename(columns={"Scope": "Period"})
+        .merge(order_map.rename(columns={"Scope": "Period"})[["Period", "_ord"]], on="Period", how="left")
+        .sort_values("_ord").drop(columns=["_ord"]).reset_index(drop=True)
+    )
 
     # chronological sort for bars
     if period == "Week":
@@ -390,59 +405,70 @@ def render_team_trend(df):
     st.altair_chart(chart, use_container_width=True)
     st.dataframe(grouped_table[["Period", "Story Points"]].rename(columns={"Period": period}))
 
-
 def render_quality_tab(bugs_df):
     st.subheader("🐞 Bug and Quality Metrics")
     period = st.selectbox("View Bugs By", ["Week", "Month", "Quarter", "Year"], key="bug_period")
     bugs = bugs_df.copy()
     bugs["Bugs"] = 1
 
-    # Week sorting via Week Start for chrono order
+    # Use a real time key for sorting
     if period == "Week":
         if "Week Start" not in bugs.columns:
             bugs["Week Start"] = bugs["Created"].dt.to_period("W-MON").dt.start_time
-        period_key = "Week Start"
+        period_key = "Week Start"   # datetime (Mon-start)
     else:
-        period_key = period
+        period_key = period         # Month/Quarter: Timestamp, Year: int
 
+    # Build dense grid (period x developer) to fill 0s
     unique_periods = sorted(bugs[period_key].dropna().unique())
     unique_devs = sorted(bugs["Developer"].dropna().unique())
     full_index = pd.MultiIndex.from_product([unique_periods, unique_devs], names=[period_key, "Developer"])
     grouped = bugs.groupby([period_key, "Developer"])["Bugs"].sum().reindex(full_index, fill_value=0).reset_index()
 
-    # sorting developers by total bugs
+    # Sort developers by total bugs (desc)
     dev_order = grouped.groupby("Developer")["Bugs"].sum().sort_values(ascending=False).index.tolist()
     grouped["Developer"] = pd.Categorical(grouped["Developer"], categories=dev_order, ordered=True)
 
+    # Human label for x-axis but DO NOT sort by this string
     def format_period(x):
         if period == "Week":
-            return pd.to_datetime(x).strftime('%d-%b-%Y').upper()
+            return pd.to_datetime(x).strftime("%d-%b-%Y").upper()
         if period == "Month":
-            return x.strftime('%b-%Y').upper()
+            return x.strftime("%b-%Y").upper()
         if period == "Quarter":
-            return f"Q{((x.month - 1) // 3) + 1}-{x.year}"
+            return f"Q{((x.month - 1)//3) + 1}-{x.year}"
         if period == "Year":
-            return str(x)
+            return str(int(x))
         return str(x)
 
     grouped["Formatted Period"] = grouped[period_key].apply(format_period)
 
+    # ---- Chronological order derived from the true period key ----
+    order_df = (
+        grouped[[period_key, "Formatted Period"]]
+        .drop_duplicates()
+        .sort_values(period_key)
+        .reset_index(drop=True)
+    )
+    sort_labels = order_df["Formatted Period"].tolist()
+
+    # Chart with correct period order
     chart = alt.Chart(grouped).mark_bar().encode(
-        x=alt.X("Formatted Period:N", title=period),
-        y=alt.Y("Bugs", title="Bug Count"),
+        x=alt.X("Formatted Period:N", title=period, sort=sort_labels),
+        y=alt.Y("Bugs:Q", title="Bug Count"),
         color=alt.Color("Developer:N", sort=dev_order)
     ).properties(height=300)
-
     st.altair_chart(chart, use_container_width=True)
 
-    # Pivot table
+    # Pivot table: columns in the same chronological order
     pivot_df = grouped.pivot_table(index="Developer", columns="Formatted Period", values="Bugs", fill_value=0)
     pivot_df["Total Bugs"] = pivot_df.sum(axis=1)
-    pivot_df = pivot_df.sort_values("Total Bugs", ascending=False)
+    ordered_cols = [c for c in sort_labels if c in pivot_df.columns] + ["Total Bugs"]
+    pivot_df = pivot_df[ordered_cols].sort_values("Total Bugs", ascending=False)
     st.markdown("#### 📊 Developer-wise Bug Summary")
     st.dataframe(pivot_df)
 
-    # Summary table
+    # Summary table (by developer), unaffected by period order
     buggy_period_df = grouped.sort_values(["Developer", "Bugs"], ascending=[True, False]).drop_duplicates("Developer")
     summary_df = grouped.groupby("Developer").agg(
         Total_Bugs=("Bugs", "sum"),
@@ -456,7 +482,6 @@ def render_quality_tab(bugs_df):
 
     st.markdown("#### 🧾 Developer Bug Summary")
     st.dataframe(summary_df)
-
 
 def render_insights_tab(df, bugs_df):
     st.header("📊 Developer Insights (Productivity & Quality)")
