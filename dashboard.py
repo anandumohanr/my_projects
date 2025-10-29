@@ -19,10 +19,10 @@ COMPLETED_STATUSES = ["ACCEPTED IN QA", "CLOSED"]
 # Resilient Jira Fetch
 # ---------------------
 @st.cache_data(ttl=14400, show_spinner=False)
-def _get_with_retry(url, headers, auth, params, retries: int = 3, backoff: float = 1.5):
+def _get_with_retry(url, headers, _auth, params, retries: int = 3, backoff: float = 1.5):
     for attempt in range(1, retries + 1):
         try:
-            resp = requests.get(url, headers=headers, auth=auth, params=params, timeout=30)
+            resp = requests.get(url, headers=headers, auth=_auth, params=params, timeout=30)
             resp.raise_for_status()
             return resp
         except Exception:
@@ -36,7 +36,7 @@ def _jira_search_all(jira_domain: str, email: str, token: str, jql: str, fields:
     Safety: dedup by id, stop on repeated/absent token, zero-new page, MAX_PAGES cap.
     """
     url = f"https://{jira_domain}/rest/api/3/search/jql"
-    auth = HTTPBasicAuth(email, token)
+    _auth = HTTPBasicAuth(email, token)
     headers = {"Accept": "application/json"}
 
     all_issues, seen_ids, seen_tokens = [], set(), set()
@@ -58,7 +58,7 @@ def _jira_search_all(jira_domain: str, email: str, token: str, jql: str, fields:
             params["nextPageToken"] = page_token
             params["pageToken"] = page_token
 
-        resp = _get_with_retry(url, headers, auth, params)
+        resp = _get_with_retry(url, headers, _auth, params)
         payload = resp.json()
 
         issues = payload.get("issues", []) or []
