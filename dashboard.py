@@ -82,7 +82,7 @@ def load_jira_data():
     jql = f"filter={st.secrets['JIRA_FILTER_ID']}"
 
     fields = (
-        "key,summary,status,customfield_11020,customfield_10010,customfield_11012,created"
+        "key,summary,status,customfield_10988,customfield_10010,customfield_11012,created"
     )
     try:
         all_issues = _jira_search_all(jira_domain, email, token, jql, fields)
@@ -108,7 +108,7 @@ def load_jira_data():
                 "Key": issue.get("key"),
                 "Summary": fields.get("summary", "") or "",
                 "Status": (fields.get("status") or {}).get("name", "") or "",
-                "Due Date": fields.get("customfield_11020"),
+                "Due Date": fields.get("customfield_10988"),
                 "Story Points": fields.get("customfield_10010", 0),
                 "Developer": developer,
                 "Created": fields.get("created"),
