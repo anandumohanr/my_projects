@@ -821,23 +821,28 @@ def render_tasks_tab(df, bugs_df):
 st.markdown("""
 <style>
 
-/* Make segmented control full width */
-div[data-baseweb="segmented-control"] {
+/* Target the whole segmented control wrapper */
+div[data-testid="stSegmentedControl"] {
     width: 100% !important;
 }
 
-/* Bigger buttons */
-div[data-baseweb="segmented-control"] button {
-    flex-grow: 1 !important;
-    font-size: 16px !important;
-    padding: 12px 20px !important;
+/* Make segments expand evenly */
+div[data-testid="stSegmentedControl"] button {
+    flex: 1 1 0% !important;
+    font-size: 18px !important;
+    padding: 14px 24px !important;
     font-weight: 600 !important;
 }
 
-/* Active tab highlight */
-div[data-baseweb="segmented-control"] button[aria-pressed="true"] {
+/* Active segment styling */
+div[data-testid="stSegmentedControl"] button[aria-pressed="true"] {
     background-color: #FF4B4B !important;
     color: white !important;
+}
+
+/* Rounded modern look */
+div[data-testid="stSegmentedControl"] button {
+    border-radius: 10px !important;
 }
 
 </style>
@@ -878,11 +883,24 @@ def main():
         for _, row in week_options_df.iterrows()
     }
 
-    selected_tab = st.segmented_control(
-        "",
-        ["📊 Summary","📈 Trends","👥 Team View","🧪 Quality","💡 Insights","🗂 Tasks","🤖 AI"],
-        key="main_nav"
-    )
+    nav_container = st.container()
+
+    with nav_container:
+        selected_tab = st.segmented_control(
+            "",
+            [
+                "📊 Summary",
+                "📈 Trends",
+                "👥 Team View",
+                "🧪 Quality",
+                "💡 Insights",
+                "🗂 Tasks",
+                "🤖 AI"
+            ],
+            key="main_nav"
+        )
+    
+    st.divider()
 
     st.markdown("---")  # optional separator
 
