@@ -859,8 +859,8 @@ def main():
         "👥 Team View": "Team View",
         "🧪 Quality": "Quality",
         "💡 Insights": "Insights",
-        "🗂 Tasks & Bug List": "Tasks",
-        "🤖 AI Assistant": "AI"
+        "🗂 Tasks & Bug List": "Tasks & Bug List",
+        "🤖 AI Assistant": "AI Assistant"
     }
 
     selected_label = st.segmented_control(
@@ -869,7 +869,7 @@ def main():
         key="main_nav"
     )
 
-    selected_tab = tab_map[selected_label]
+    selected_tab = tab_map.get(selected_label, "Summary")  # default fallback
 
     st.divider()
 
