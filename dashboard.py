@@ -854,9 +854,10 @@ def main():
     }
 
     selected_tab = st.segmented_control(
-    "",
-    ["Summary", "Trends", "Team View", "Quality", "Insights", "Tasks & Bug List", "AI Assistant"],
-    key="main_nav"
+        "",
+        ["Summary","Trends","Team View","Quality","Insights","Tasks & Bug List","AI Assistant"],
+        key="main_nav",
+        use_container_width=True
     )
 
     st.markdown("---")  # optional separator
