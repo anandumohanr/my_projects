@@ -818,36 +818,6 @@ def render_tasks_tab(df, bugs_df):
         use_container_width=True
     )
 
-st.markdown("""
-<style>
-
-/* Make radio horizontal */
-div[role="radiogroup"] {
-    flex-direction: row !important;
-    justify-content: center;
-    gap: 10px;
-}
-
-/* Style each option like a tab */
-div[role="radiogroup"] label {
-    background: #f0f2f6;
-    padding: 12px 22px;
-    border-radius: 8px;
-    border: 1px solid #ddd;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-/* Selected tab */
-div[role="radiogroup"] input:checked + div {
-    background: #FF4B4B !important;
-    color: white !important;
-    border: none;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
 # ---------------------
 # Main
 # ---------------------
@@ -883,14 +853,11 @@ def main():
         for _, row in week_options_df.iterrows()
     }
 
-    selected_tab = st.radio(
-        "",
-        ["📊 Summary","📈 Trends","👥 Team View","🧪 Quality","💡 Insights","🗂 Tasks & Bug List","🤖 AI Assistant"],
-        horizontal=True,
-        key="main_nav"
+    selected_tab = st.segmented_control(
+    "",
+    ["📊 Summary", "📈 Trends", "👥 Team View", "🧪 Quality", "💡 Insights", "🗂 Tasks & Bug List", "🤖 AI Assistant"],
+    key="main_nav"
     )
-    
-    st.divider()
 
     st.markdown("---")  # optional separator
 
