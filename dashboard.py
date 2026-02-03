@@ -821,28 +821,28 @@ def render_tasks_tab(df, bugs_df):
 st.markdown("""
 <style>
 
-/* Target the whole segmented control wrapper */
-div[data-testid="stSegmentedControl"] {
-    width: 100% !important;
+/* Make radio horizontal */
+div[role="radiogroup"] {
+    flex-direction: row !important;
+    justify-content: center;
+    gap: 10px;
 }
 
-/* Make segments expand evenly */
-div[data-testid="stSegmentedControl"] button {
-    flex: 1 1 0% !important;
-    font-size: 18px !important;
-    padding: 14px 24px !important;
-    font-weight: 600 !important;
+/* Style each option like a tab */
+div[role="radiogroup"] label {
+    background: #f0f2f6;
+    padding: 12px 22px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    font-weight: 600;
+    cursor: pointer;
 }
 
-/* Active segment styling */
-div[data-testid="stSegmentedControl"] button[aria-pressed="true"] {
-    background-color: #FF4B4B !important;
+/* Selected tab */
+div[role="radiogroup"] input:checked + div {
+    background: #FF4B4B !important;
     color: white !important;
-}
-
-/* Rounded modern look */
-div[data-testid="stSegmentedControl"] button {
-    border-radius: 10px !important;
+    border: none;
 }
 
 </style>
@@ -883,22 +883,12 @@ def main():
         for _, row in week_options_df.iterrows()
     }
 
-    nav_container = st.container()
-
-    with nav_container:
-        selected_tab = st.segmented_control(
-            "",
-            [
-                "📊 Summary",
-                "📈 Trends",
-                "👥 Team View",
-                "🧪 Quality",
-                "💡 Insights",
-                "🗂 Tasks",
-                "🤖 AI"
-            ],
-            key="main_nav"
-        )
+    selected_tab = st.radio(
+        "",
+        ["📊 Summary","📈 Trends","👥 Team View","🧪 Quality","💡 Insights","🗂 Tasks & Bug List","🤖 AI Assistant"],
+        horizontal=True,
+        key="main_nav"
+    )
     
     st.divider()
 
