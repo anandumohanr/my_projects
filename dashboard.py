@@ -853,21 +853,38 @@ def main():
         for _, row in week_options_df.iterrows()
     }
 
-    tabs = st.tabs(["Summary", "Trends", "Team View", "Quality", "Insights", "Tasks & Bug List", "AI Assistant"])
-    with tabs[0]:
-        selected_week = st.selectbox("Select week to view:", options=list(week_label_map.keys()), format_func=lambda x: week_label_map[x])
+    selected_tab = st.segmented_control(
+    "",
+    ["Summary", "Trends", "Team View", "Quality", "Insights", "Tasks & Bug List", "AI Assistant"],
+    key="main_nav"
+    )
+
+    st.markdown("---")  # optional separator
+
+    if selected_tab == "Summary":
+        selected_week = st.selectbox(
+            "Select week to view:",
+            options=list(week_label_map.keys()),
+            format_func=lambda x: week_label_map[x]
+        )
         render_summary_tab(df, selected_week)
-    with tabs[1]:
+
+    elif selected_tab == "Trends":
         render_trend_tab(df)
-    with tabs[2]:
+
+    elif selected_tab == "Team View":
         render_team_trend(df)
-    with tabs[3]:
+
+    elif selected_tab == "Quality":
         render_quality_tab(bugs_df)
-    with tabs[4]:
+
+    elif selected_tab == "Insights":
         render_insights_tab(df, bugs_df)
-    with tabs[5]:
+
+    elif selected_tab == "Tasks & Bug List":
         render_tasks_tab(df, bugs_df)
-    with tabs[6]:
+
+    elif selected_tab == "AI Assistant":
         render_ai_assistant_tab(df, bugs_df)
 
 if __name__ == "__main__":
