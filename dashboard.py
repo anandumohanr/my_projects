@@ -853,13 +853,23 @@ def main():
         for _, row in week_options_df.iterrows()
     }
 
-    st.markdown("##")
+    tab_map = {
+        "📊 Summary": "Summary",
+        "📈 Trends": "Trends",
+        "👥 Team View": "Team View",
+        "🧪 Quality": "Quality",
+        "💡 Insights": "Insights",
+        "🗂 Tasks & Bug List": "Tasks",
+        "🤖 AI Assistant": "AI"
+    }
 
-    selected_tab = st.segmented_control(
-        "📌 Navigate",
-        ["📊 Summary","📈 Trends","👥 Team View","🧪 Quality","💡 Insights","🗂 Tasks & Bug List","🤖 AI Assistant"],
+    selected_label = st.segmented_control(
+        "",
+        list(tab_map.keys()),
         key="main_nav"
     )
+
+    selected_tab = tab_map[selected_label]
 
     st.divider()
 
