@@ -853,13 +853,15 @@ def main():
         for _, row in week_options_df.iterrows()
     }
 
+    st.markdown("##")
+
     selected_tab = st.segmented_control(
-    "",
-    ["📊 Summary", "📈 Trends", "👥 Team View", "🧪 Quality", "💡 Insights", "🗂 Tasks & Bug List", "🤖 AI Assistant"],
-    key="main_nav"
+        "📌 Navigate",
+        ["📊 Summary","📈 Trends","👥 Team View","🧪 Quality","💡 Insights","🗂 Tasks & Bug List","🤖 AI Assistant"],
+        key="main_nav"
     )
 
-    st.markdown("---")  # optional separator
+    st.divider()
 
     if selected_tab == "Summary":
         selected_week = st.selectbox(
