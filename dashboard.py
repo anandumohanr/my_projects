@@ -818,6 +818,31 @@ def render_tasks_tab(df, bugs_df):
         use_container_width=True
     )
 
+st.markdown("""
+<style>
+
+/* Make segmented control full width */
+div[data-baseweb="segmented-control"] {
+    width: 100% !important;
+}
+
+/* Bigger buttons */
+div[data-baseweb="segmented-control"] button {
+    flex-grow: 1 !important;
+    font-size: 16px !important;
+    padding: 12px 20px !important;
+    font-weight: 600 !important;
+}
+
+/* Active tab highlight */
+div[data-baseweb="segmented-control"] button[aria-pressed="true"] {
+    background-color: #FF4B4B !important;
+    color: white !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 # ---------------------
 # Main
 # ---------------------
@@ -855,9 +880,8 @@ def main():
 
     selected_tab = st.segmented_control(
         "",
-        ["Summary","Trends","Team View","Quality","Insights","Tasks & Bug List","AI Assistant"],
-        key="main_nav",
-        use_container_width=True
+        ["📊 Summary","📈 Trends","👥 Team View","🧪 Quality","💡 Insights","🗂 Tasks","🤖 AI"],
+        key="main_nav"
     )
 
     st.markdown("---")  # optional separator
